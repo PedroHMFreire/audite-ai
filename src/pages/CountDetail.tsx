@@ -50,9 +50,11 @@ export default function CountDetail() {
   async function onParsed(items: PlanRow[]) {
     setPlan(items)
     if (!id) return
+    // sobrescreve a planilha desta contagem
     await supabase.from('plan_items').delete().eq('count_id', id)
     await savePlanItems(id, items)
     alert('Planilha carregada com sucesso!')
+    await refreshPlan()
   }
 
   async function onAdd(codigo: string, qty: number = 1) {
@@ -84,6 +86,18 @@ export default function CountDetail() {
     await refreshEntries()
   }
 
+  // >>> NOVO: totais de códigos e itens (planilha x inseridos)
+  const totals = useMemo(() => {
+    const planCodes = plan.length
+    const planItems = plan.reduce((acc, p) => acc + (Number(p.saldo) || 0), 0)
+
+    const insertedItems = entries.reduce((acc, e) => acc + (Number(e.qty) || 1), 0)
+    const insertedCodes = new Set(entries.map(e => e.codigo)).size
+
+    return { planCodes, planItems, insertedCodes, insertedItems }
+  }, [plan, entries])
+
+  // Cards de categoria (reg/exc/fal) continuam iguais
   const stats = useMemo(() => {
     const mapPlan = new Map<string, number>()
     for (const p of plan) mapPlan.set(p.codigo, p.saldo)
@@ -131,6 +145,27 @@ export default function CountDetail() {
         </div>
       </div>
 
+      {/* NOVO: Resumo de quantidades (mobile-first) */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card">
+          <div className="text-xs text-zinc-500">Planilha • Códigos</div>
+          <div className="text-2xl font-semibold">{totals.planCodes}</div>
+        </div>
+        <div className="card">
+          <div className="text-xs text-zinc-500">Planilha • Itens</div>
+          <div className="text-2xl font-semibold">{totals.planItems}</div>
+        </div>
+        <div className="card">
+          <div className="text-xs text-zinc-500">Inseridos • Códigos</div>
+          <div className="text-2xl font-semibold">{totals.insertedCodes}</div>
+        </div>
+        <div className="card">
+          <div className="text-xs text-zinc-500">Inseridos • Itens</div>
+          <div className="text-2xl font-semibold">{totals.insertedItems}</div>
+        </div>
+      </div>
+
+      {/* Cards de categoria (mantidos) */}
       <div className="grid grid-cols-3 gap-3">
         <div className="card"><div className="text-xs text-zinc-500">Regulares</div><div className="text-2xl font-semibold">{stats.reg}</div></div>
         <div className="card"><div className="text-xs text-zinc-500">Excesso</div><div className="text-2xl font-semibold">{stats.exc}</div></div>

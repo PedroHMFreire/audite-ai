@@ -1,19 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getCountById, getResultsByCount } from '@/lib/db'
+import { getCountById, getResultsByCount, getPlanItems, listManualEntries } from '@/lib/db'
 import type { Result } from '@/lib/db'
 import { generateReportPDF } from '@/lib/pdf'
+
+type PlanRow = { codigo: string; nome: string; saldo: number }
+type Entry = { id: string; count_id: string; codigo: string; qty: number; created_at: string }
 
 export default function Report() {
   const { id } = useParams()
   const [count, setCount] = useState<any>(null)
   const [rows, setRows] = useState<Result[]>([])
+  const [plan, setPlan] = useState<PlanRow[]>([])
+  const [entries, setEntries] = useState<Entry[]>([])
   const [logoPng, setLogoPng] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     if (!id) return
     getCountById(id).then(setCount)
     getResultsByCount(id).then(setRows)
+    getPlanItems(id).then(setPlan)
+    listManualEntries(id).then(setEntries)
 
     // Tenta converter logo.svg -> PNG (para o jsPDF)
     ;(async () => {
@@ -28,16 +35,27 @@ export default function Report() {
     })()
   }, [id])
 
-  const totals = {
+  const catTotals = {
     regular: rows.filter(r=>r.status==='regular').length,
     excesso: rows.filter(r=>r.status==='excesso').length,
     falta: rows.filter(r=>r.status==='falta').length,
   }
 
+  // >>> NOVO: totais de códigos e itens
+  const totals = useMemo(() => {
+    const planCodes = plan.length
+    const planItems = plan.reduce((acc, p) => acc + (Number(p.saldo) || 0), 0)
+
+    const insertedItems = entries.reduce((acc, e) => acc + (Number(e.qty) || 1), 0)
+    const insertedCodes = new Set(entries.map(e => e.codigo)).size
+
+    return { planCodes, planItems, insertedCodes, insertedItems }
+  }, [plan, entries])
+
   function exportPDF() {
     try {
       const blob = generateReportPDF({
-        logoDataUrl: logoPng,               // PNG/ JPEG dataURL
+        logoDataUrl: logoPng,
         countName: count?.nome || '',
         storeName: '—',
         date: new Date(count?.created_at || Date.now()).toLocaleString(),
@@ -63,10 +81,31 @@ export default function Report() {
         <div className="text-sm text-zinc-500">Contagem: {count?.nome}</div>
       </div>
 
+      {/* NOVO: Resumo Planilha x Inseridos */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card">
+          <div className="text-xs text-zinc-500">Planilha • Códigos</div>
+          <div className="text-2xl font-semibold">{totals.planCodes}</div>
+        </div>
+        <div className="card">
+          <div className="text-xs text-zinc-500">Planilha • Itens</div>
+          <div className="text-2xl font-semibold">{totals.planItems}</div>
+        </div>
+        <div className="card">
+          <div className="text-xs text-zinc-500">Inseridos • Códigos</div>
+          <div className="text-2xl font-semibold">{totals.insertedCodes}</div>
+        </div>
+        <div className="card">
+          <div className="text-xs text-zinc-500">Inseridos • Itens</div>
+          <div className="text-2xl font-semibold">{totals.insertedItems}</div>
+        </div>
+      </div>
+
+      {/* Totais por categoria (mantidos) */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="card"><div className="text-xs text-zinc-500">Regulares</div><div className="text-2xl font-semibold">{totals.regular}</div></div>
-        <div className="card"><div className="text-xs text-zinc-500">Excesso</div><div className="text-2xl font-semibold">{totals.excesso}</div></div>
-        <div className="card"><div className="text-xs text-zinc-500">Falta</div><div className="text-2xl font-semibold">{totals.falta}</div></div>
+        <div className="card"><div className="text-xs text-zinc-500">Regulares</div><div className="text-2xl font-semibold">{catTotals.regular}</div></div>
+        <div className="card"><div className="text-xs text-zinc-500">Excesso</div><div className="text-2xl font-semibold">{catTotals.excesso}</div></div>
+        <div className="card"><div className="text-xs text-zinc-500">Falta</div><div className="text-2xl font-semibold">{catTotals.falta}</div></div>
       </div>
 
       <div className="card">
