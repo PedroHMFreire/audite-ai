@@ -391,7 +391,7 @@ export default function CountDetail() {
                     type="number"
                     min="1"
                     value={editQty} 
-                    onChange={ev=>setEditQty(ev.target.value === '' ? '' : Math.max(1, Number(ev.target.value) || 1))} 
+                    onChange={ev=>setEditQty(ev.target.value === '' ? 1 : Math.max(1, Number(ev.target.value) || 1))} 
                   />
                   <button className="badge" onClick={saveEdit}>Salvar</button>
                   <button className="badge" onClick={cancelEdit}>Cancelar</button>

@@ -410,7 +410,7 @@ export default function ScheduleConfig() {
                 value={formData.sectors_per_week}
                 onChange={e => setFormData(prev => ({ 
                   ...prev, 
-                  sectors_per_week: e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1) 
+                  sectors_per_week: e.target.value === '' ? 1 : Math.max(1, parseInt(e.target.value) || 1) 
                 }))}
               />
             </div>
@@ -425,7 +425,7 @@ export default function ScheduleConfig() {
                 value={formData.total_weeks}
                 onChange={e => setFormData(prev => ({ 
                   ...prev, 
-                  total_weeks: e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1) 
+                  total_weeks: e.target.value === '' ? 1 : Math.max(1, parseInt(e.target.value) || 1) 
                 }))}
               />
             </div>
