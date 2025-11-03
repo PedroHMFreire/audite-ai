@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
+import { ToastProvider } from '@/components/Toast'
 import Login from '@/pages/Login'
 import Home from '@/pages/Home'
 import Counts from '@/pages/Counts'
@@ -30,19 +31,21 @@ function PrivateRoute({ children }: { children: JSX.Element }) {
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-slate-900 dark:text-slate-50">
-      <Header />
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 md:px-8 py-6">
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
-          <Route path="/contagens" element={<PrivateRoute><Counts /></PrivateRoute>} />
-          <Route path="/contagens/:id" element={<PrivateRoute><CountDetail /></PrivateRoute>} />
-          <Route path="/relatorio/:id" element={<PrivateRoute><Report /></PrivateRoute>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-      <Footer />
-    </div>
+    <ToastProvider>
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-slate-900 dark:text-slate-50">
+        <Header />
+        <main className="max-w-3xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
+            <Route path="/contagens" element={<PrivateRoute><Counts /></PrivateRoute>} />
+            <Route path="/contagens/:id" element={<PrivateRoute><CountDetail /></PrivateRoute>} />
+            <Route path="/relatorio/:id" element={<PrivateRoute><Report /></PrivateRoute>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
+    </ToastProvider>
   )
 }

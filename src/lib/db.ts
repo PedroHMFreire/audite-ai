@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient'
 
 export type Count = { id: string; user_id: string; store_id: string | null; nome: string; status: string | null; created_at: string }
 export type PlanItem = { id?: string; count_id: string; codigo: string; nome: string; saldo: number }
-export type ManualEntry = { id?: string; count_id: string; codigo: string; qty: number; created_at?: string }
+export type ManualEntry = { id?: string; count_id: string; codigo: string; qty?: number; created_at?: string }
 export type Result = { id?: string; count_id: string; codigo: string; status: 'regular'|'excesso'|'falta'; manual_qtd: number; saldo_qtd: number; nome_produto: string }
 
 export async function getCurrentUserId(): Promise<string> {
@@ -34,13 +34,31 @@ export async function createCount(nome: string, storeName: string | null) {
 }
 
 export async function savePlanItems(count_id: string, items: { codigo: string; nome: string; saldo: number }[]) {
-  const rows = items.map(r => ({ count_id, codigo: r.codigo, nome: r.nome, saldo: r.saldo }))
+  if (!items || items.length === 0) {
+    throw new Error('Lista de itens não pode estar vazia')
+  }
+  
+  const rows = items.map(r => ({ 
+    count_id, 
+    codigo: r.codigo.trim(), 
+    nome: r.nome.trim(), 
+    saldo: Math.max(0, r.saldo) 
+  }))
+  
   const { error } = await supabase.from('plan_items').insert(rows)
   if (error) throw error
 }
 
 export async function addManualEntry(count_id: string, codigo: string, qty: number = 1) {
-  const { error } = await supabase.from('manual_entries').insert({ count_id, codigo, qty })
+  if (!codigo.trim()) {
+    throw new Error('Código não pode estar vazio')
+  }
+  
+  const { error } = await supabase.from('manual_entries').insert({ 
+    count_id, 
+    codigo: codigo.trim(), 
+    qty: Math.max(1, qty) 
+  })
   if (error) throw error
 }
 
@@ -93,8 +111,8 @@ export async function computeAndSaveResults(count_id: string) {
 
   const manualMap = new Map<string, number>()
   for (const e of entries || []) {
-    const q = (e as any).qty ?? 1
-    manualMap.set((e as any).codigo, (manualMap.get((e as any).codigo) || 0) + q)
+    const qty = e.qty ?? 1
+    manualMap.set(e.codigo, (manualMap.get(e.codigo) || 0) + qty)
   }
 
   const planMap = new Map<string, { nome: string; saldo: number }>()
@@ -125,8 +143,12 @@ export async function computeAndSaveResults(count_id: string) {
 
   // Clean previous and insert new
   await supabase.from('results').delete().eq('count_id', count_id)
-  const { error: rErr } = await supabase.from('results').insert(results)
-  if (rErr) throw rErr
+  
+  if (results.length > 0) {
+    const { error: rErr } = await supabase.from('results').insert(results)
+    if (rErr) throw rErr
+  }
+  
   return results
 }
 
@@ -139,15 +161,19 @@ export async function getResultsByCount(count_id: string) {
 export async function getTotalsLastCounts(limit = 5) {
   const { data: counts, error } = await supabase.from('counts').select('id,nome,created_at').order('created_at', { ascending: false }).limit(limit)
   if (error) throw error
+  
   const out: { name: string; Regular: number; Excesso: number; Falta: number }[] = []
-  for (const c of counts) {
-    const { data: rows } = await supabase.from('results').select('status').eq('count_id', c.id)
+  
+  for (const c of counts || []) {
+    const { data: rows, error: rErr } = await supabase.from('results').select('status').eq('count_id', c.id)
+    if (rErr) throw rErr
+    
     const totals = { Regular: 0, Excesso: 0, Falta: 0 }
     for (const r of rows || []) {
-      const s = (r as any).status as string
-      if (s === 'regular') totals.Regular++
-      if (s === 'excesso') totals.Excesso++
-      if (s === 'falta') totals.Falta++
+      const status = r.status as string
+      if (status === 'regular') totals.Regular++
+      else if (status === 'excesso') totals.Excesso++
+      else if (status === 'falta') totals.Falta++
     }
     out.push({ name: c.nome, ...totals })
   }
