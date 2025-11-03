@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useToast } from '@/components/Toast'
+import ScheduleCalendar from '@/components/ScheduleCalendar'
 import {
   getCategories,
   getScheduleConfigs,
@@ -28,6 +29,7 @@ export default function ScheduleConfig() {
   const [configs, setConfigs] = useState<ScheduleConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [calendarRefresh, setCalendarRefresh] = useState(0) // Para forçar refresh do calendário
   
   // Estados para edição e exclusão
   const [editingConfig, setEditingConfig] = useState<ScheduleConfig | null>(null)
@@ -181,6 +183,7 @@ export default function ScheduleConfig() {
       })
 
       await loadData()
+      setCalendarRefresh(prev => prev + 1) // Força refresh do calendário
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao criar cronograma'
       addToast({
@@ -208,6 +211,8 @@ export default function ScheduleConfig() {
         message: 'Cronograma regenerado!',
         duration: 3000
       })
+      
+      setCalendarRefresh(prev => prev + 1) // Força refresh do calendário
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao regenerar cronograma'
       addToast({
@@ -305,16 +310,6 @@ export default function ScheduleConfig() {
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Configure e gere cronogramas automáticos para suas contagens cíclicas
           </p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Link
-            to="/calendario"
-            className="btn-secondary text-sm gap-1.5"
-          >
-            <span className="text-xs">📅</span>
-            Ver Calendário
-          </Link>
         </div>
       </div>
 
@@ -665,6 +660,9 @@ export default function ScheduleConfig() {
           </div>
         </div>
       )}
+
+      {/* Calendário Integrado */}
+      <ScheduleCalendar refreshTrigger={calendarRefresh} />
     </div>
   )
 }

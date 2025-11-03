@@ -68,16 +68,6 @@ export default function Header() {
                 >
                   Cronograma
                 </Link>
-                <Link 
-                  to="/calendario" 
-                  className={`text-sm transition-colors ${
-                    loc.pathname === '/calendario'
-                      ? 'text-zinc-900 dark:text-zinc-100 font-medium' 
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-                  }`}
-                >
-                  Calendário
-                </Link>
               </nav>
             )}
           </div>
@@ -145,17 +135,6 @@ export default function Header() {
                 }`}
               >
                 ⚙️ Cronograma
-              </Link>
-              <Link 
-                to="/calendario" 
-                onClick={handleMobileNavClick}
-                className={`block p-3 rounded-lg transition-colors ${
-                  loc.pathname === '/calendario'
-                    ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-medium' 
-                    : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                }`}
-              >
-                📅 Calendário
               </Link>
               
               <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3 mt-3">
