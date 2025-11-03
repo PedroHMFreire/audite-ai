@@ -7,6 +7,9 @@ import Home from '@/pages/Home'
 import Counts from '@/pages/Counts'
 import CountDetail from '@/pages/CountDetail'
 import Report from '@/pages/Report'
+import Categories from '@/pages/Categories'
+import ScheduleConfig from '@/pages/ScheduleConfig'
+import ScheduleCalendar from '@/pages/ScheduleCalendar'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -41,6 +44,9 @@ export default function App() {
             <Route path="/contagens" element={<PrivateRoute><Counts /></PrivateRoute>} />
             <Route path="/contagens/:id" element={<PrivateRoute><CountDetail /></PrivateRoute>} />
             <Route path="/relatorio/:id" element={<PrivateRoute><Report /></PrivateRoute>} />
+            <Route path="/categorias" element={<PrivateRoute><Categories /></PrivateRoute>} />
+            <Route path="/cronograma" element={<PrivateRoute><ScheduleConfig /></PrivateRoute>} />
+            <Route path="/calendario" element={<PrivateRoute><ScheduleCalendar /></PrivateRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
