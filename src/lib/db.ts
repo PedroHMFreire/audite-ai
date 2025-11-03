@@ -574,38 +574,22 @@ export async function generateSchedule(options: GenerateScheduleOptions): Promis
   const schedule: Omit<ScheduleItem, 'id' | 'created_at' | 'updated_at'>[] = []
   const activeCategories = categories.filter(c => c.is_active)
   
-  // Calcula quantas vezes cada categoria deve aparecer no período total
-  // Para garantir que cada categoria seja contada pelo menos uma vez por mês (4 semanas)
-  const weeksPerMonth = 4
-  const monthsInPeriod = Math.ceil(totalWeeks / weeksPerMonth)
-  
-  // Cria um pool de categorias repetidas para distribuição equilibrada
-  const categoryPool: Category[] = []
-  for (let month = 0; month < monthsInPeriod; month++) {
-    activeCategories.forEach(category => {
-      categoryPool.push(category)
-    })
+  if (activeCategories.length === 0) {
+    throw new Error('Nenhuma categoria ativa encontrada')
   }
   
-  // Embaralha o pool para distribuição aleatória mas equilibrada
-  shuffleArray(categoryPool)
-  
+  // NOVA LÓGICA: Distribuição Round-Robin garantindo equidade
   const startDateObj = new Date(startDate)
   let categoryIndex = 0
   
   for (let week = 1; week <= totalWeeks; week++) {
-    // Seleciona categorias para esta semana
     const weekCategories: Category[] = []
     
-    for (let i = 0; i < sectorsPerWeek && categoryIndex < categoryPool.length; i++) {
-      weekCategories.push(categoryPool[categoryIndex])
+    // Seleciona categorias em round-robin (rotação circular)
+    for (let i = 0; i < sectorsPerWeek; i++) {
+      const selectedCategory = activeCategories[categoryIndex % activeCategories.length]
+      weekCategories.push(selectedCategory)
       categoryIndex++
-    }
-    
-    // Se o pool acabou, recomeça (para cronogramas muito longos)
-    if (categoryIndex >= categoryPool.length) {
-      categoryIndex = 0
-      shuffleArray(categoryPool) // Re-embaralha para nova rodada
     }
     
     // Distribui pelas dias úteis
