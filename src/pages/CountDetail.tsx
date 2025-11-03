@@ -386,7 +386,13 @@ export default function CountDetail() {
               {editingId === e.id ? (
                 <>
                   <input className="input" value={editCode} onChange={ev=>setEditCode(ev.target.value)} />
-                  <input className="input w-24" inputMode="numeric" value={editQty} onChange={ev=>setEditQty(Math.max(1, Number(ev.target.value) || 1))} />
+                  <input 
+                    className="input w-24" 
+                    type="number"
+                    min="1"
+                    value={editQty} 
+                    onChange={ev=>setEditQty(ev.target.value === '' ? '' : Math.max(1, Number(ev.target.value) || 1))} 
+                  />
                   <button className="badge" onClick={saveEdit}>Salvar</button>
                   <button className="badge" onClick={cancelEdit}>Cancelar</button>
                 </>

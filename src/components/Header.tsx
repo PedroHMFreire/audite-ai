@@ -49,16 +49,6 @@ export default function Header() {
                   Contagens
                 </Link>
                 <Link 
-                  to="/categorias" 
-                  className={`text-sm transition-colors ${
-                    loc.pathname === '/categorias'
-                      ? 'text-zinc-900 dark:text-zinc-100 font-medium' 
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-                  }`}
-                >
-                  Categorias
-                </Link>
-                <Link 
                   to="/cronograma" 
                   className={`text-sm transition-colors ${
                     loc.pathname === '/cronograma'
@@ -133,7 +123,7 @@ export default function Header() {
                     : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                 }`}
               >
-                📂 Categorias
+                🏷️ Categorias
               </Link>
               <Link 
                 to="/cronograma" 

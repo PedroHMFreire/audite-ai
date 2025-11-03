@@ -41,7 +41,6 @@ export default function Home() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Principal</h1>
         <div className="flex gap-3">
-          <Link to="/categorias" className="link">Categorias</Link>
           <Link to="/contagens" className="link">Ver todas as contagens</Link>
         </div>
       </div>
