@@ -9,14 +9,6 @@ import {
   type Category
 } from '@/lib/db'
 
-const PRIORITY_LABELS = {
-  1: 'Muito Baixa',
-  2: 'Baixa', 
-  3: 'Média',
-  4: 'Alta',
-  5: 'Muito Alta'
-}
-
 const DEFAULT_COLORS = [
   '#3B82F6', // Blue
   '#EC4899', // Pink
@@ -41,7 +33,6 @@ export default function Categories() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    priority: 3,
     color: DEFAULT_COLORS[0]
   })
 
@@ -71,7 +62,6 @@ export default function Categories() {
     setFormData({
       name: '',
       description: '',
-      priority: 3,
       color: DEFAULT_COLORS[0]
     })
     setEditingId(null)
@@ -87,7 +77,6 @@ export default function Categories() {
     setFormData({
       name: category.name,
       description: category.description || '',
-      priority: category.priority,
       color: category.color
     })
     setEditingId(category.id)
@@ -112,7 +101,7 @@ export default function Categories() {
         await updateCategory(editingId, {
           name: formData.name.trim(),
           description: formData.description.trim() || undefined,
-          priority: formData.priority,
+          priority: 3, // Valor padrão fixo
           color: formData.color
         })
         addToast({
@@ -125,7 +114,7 @@ export default function Categories() {
         await createCategory({
           name: formData.name.trim(),
           description: formData.description.trim() || undefined,
-          priority: formData.priority,
+          priority: 3, // Valor padrão fixo
           color: formData.color,
           is_active: true
         })
@@ -174,17 +163,6 @@ export default function Categories() {
       console.error('Erro ao excluir categoria:', err)
     }
   }, [addToast, loadCategories])
-
-  const getPriorityBadgeClass = (priority: number) => {
-    switch (priority) {
-      case 5: return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-      case 4: return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-      case 3: return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-      case 2: return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-      case 1: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-    }
-  }
 
   if (loading) {
     return (
@@ -243,19 +221,6 @@ export default function Categories() {
                   placeholder="Ex: Roupas Masculinas"
                   required
                 />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-1">Prioridade</label>
-                <select
-                  className="input"
-                  value={formData.priority}
-                  onChange={e => setFormData(prev => ({ ...prev, priority: Number(e.target.value) }))}
-                >
-                  {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
               </div>
             </div>
 
@@ -326,9 +291,6 @@ export default function Categories() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-medium truncate">{category.name}</h3>
-                    <span className={`text-xs px-2 py-1 rounded-full ${getPriorityBadgeClass(category.priority)}`}>
-                      {PRIORITY_LABELS[category.priority as keyof typeof PRIORITY_LABELS]}
-                    </span>
                   </div>
                   {category.description && (
                     <p className="text-sm text-zinc-600 dark:text-zinc-400 truncate">

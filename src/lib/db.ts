@@ -572,27 +572,41 @@ export async function generateSchedule(options: GenerateScheduleOptions): Promis
     .eq('config_id', configId)
   
   const schedule: Omit<ScheduleItem, 'id' | 'created_at' | 'updated_at'>[] = []
-  const categoryPool = [...categories].filter(c => c.is_active)
+  const activeCategories = categories.filter(c => c.is_active)
   
-  // Ordena categorias por prioridade e data da última contagem
-  categoryPool.sort((a, b) => {
-    // Prioridade maior primeiro
-    if (a.priority !== b.priority) {
-      return b.priority - a.priority
-    }
-    
-    // Se mesma prioridade, quem não foi contado há mais tempo
-    const aLastCounted = a.last_counted_at ? new Date(a.last_counted_at).getTime() : 0
-    const bLastCounted = b.last_counted_at ? new Date(b.last_counted_at).getTime() : 0
-    
-    return aLastCounted - bLastCounted
-  })
+  // Calcula quantas vezes cada categoria deve aparecer no período total
+  // Para garantir que cada categoria seja contada pelo menos uma vez por mês (4 semanas)
+  const weeksPerMonth = 4
+  const monthsInPeriod = Math.ceil(totalWeeks / weeksPerMonth)
+  
+  // Cria um pool de categorias repetidas para distribuição equilibrada
+  const categoryPool: Category[] = []
+  for (let month = 0; month < monthsInPeriod; month++) {
+    activeCategories.forEach(category => {
+      categoryPool.push(category)
+    })
+  }
+  
+  // Embaralha o pool para distribuição aleatória mas equilibrada
+  shuffleArray(categoryPool)
   
   const startDateObj = new Date(startDate)
+  let categoryIndex = 0
   
   for (let week = 1; week <= totalWeeks; week++) {
     // Seleciona categorias para esta semana
-    const weekCategories = selectCategoriesForWeek(categoryPool, sectorsPerWeek, week)
+    const weekCategories: Category[] = []
+    
+    for (let i = 0; i < sectorsPerWeek && categoryIndex < categoryPool.length; i++) {
+      weekCategories.push(categoryPool[categoryIndex])
+      categoryIndex++
+    }
+    
+    // Se o pool acabou, recomeça (para cronogramas muito longos)
+    if (categoryIndex >= categoryPool.length) {
+      categoryIndex = 0
+      shuffleArray(categoryPool) // Re-embaralha para nova rodada
+    }
     
     // Distribui pelas dias úteis
     const scheduledDays = distributeAcrossWorkDays(weekCategories, workDays)
@@ -637,23 +651,6 @@ export async function generateSchedule(options: GenerateScheduleOptions): Promis
 }
 
 // Funções auxiliares para o algoritmo
-function selectCategoriesForWeek(
-  categoryPool: Category[], 
-  sectorsPerWeek: number, 
-  weekNumber: number
-): Category[] {
-  // Embaralha levemente para variedade, mas mantém ordem de prioridade
-  const shuffled = [...categoryPool]
-  
-  // A cada 3 semanas, reordena para dar chance a todas as categorias
-  if (weekNumber % 3 === 0) {
-    shuffleArray(shuffled)
-    shuffled.sort((a, b) => b.priority - a.priority)
-  }
-  
-  return shuffled.slice(0, sectorsPerWeek)
-}
-
 function distributeAcrossWorkDays(
   categories: Category[], 
   workDays: number[]

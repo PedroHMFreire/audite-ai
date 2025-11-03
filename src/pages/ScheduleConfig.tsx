@@ -348,7 +348,6 @@ export default function ScheduleConfig() {
                   style={{ backgroundColor: category.color }}
                 />
                 <span>{category.name}</span>
-                <span className="text-xs text-zinc-500">P{category.priority}</span>
               </div>
             ))}
           </div>
