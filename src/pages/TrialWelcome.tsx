@@ -68,19 +68,19 @@ export default function TrialWelcome() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-zinc-50 to-zinc-100">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-zinc-900 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">A</span>
             </div>
             <span className="text-2xl font-bold text-gray-900">AUDITE.AI</span>
           </div>
           
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Check className="w-8 h-8 text-green-600" />
+          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check className="w-8 h-8 text-orange-600" />
           </div>
           
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -106,8 +106,8 @@ export default function TrialWelcome() {
           
           <div className="grid md:grid-cols-3 gap-6">
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                <BarChart3 className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-zinc-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <BarChart3 className="w-6 h-6 text-zinc-700" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Contagens Ilimitadas</h3>
               <p className="text-sm text-gray-600">
@@ -116,8 +116,8 @@ export default function TrialWelcome() {
             </div>
             
             <div className="text-center">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                <Calendar className="w-6 h-6 text-green-600" />
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Calendar className="w-6 h-6 text-orange-600" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Cronograma Automático</h3>
               <p className="text-sm text-gray-600">
@@ -126,8 +126,8 @@ export default function TrialWelcome() {
             </div>
             
             <div className="text-center">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-                <Users className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-zinc-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                <Users className="w-6 h-6 text-zinc-700" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Suporte Completo</h3>
               <p className="text-sm text-gray-600">
@@ -148,10 +148,10 @@ export default function TrialWelcome() {
               <div key={index} className="flex items-start gap-4 p-4 rounded-lg border border-gray-200">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                   step.completed 
-                    ? 'bg-green-100 text-green-600' 
+                    ? 'bg-orange-100 text-orange-600' 
                     : index === 0 && !isEmailConfirmed
-                    ? 'bg-yellow-100 text-yellow-600'
-                    : 'bg-gray-100 text-gray-600'
+                    ? 'bg-orange-100 text-orange-600'
+                    : 'bg-zinc-100 text-zinc-600'
                 }`}>
                   {step.completed ? <Check className="w-5 h-5" /> : step.icon}
                 </div>
@@ -175,14 +175,14 @@ export default function TrialWelcome() {
 
         {/* Email Confirmation Alert */}
         {!isEmailConfirmed && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8">
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-8">
             <div className="flex items-start gap-3">
-              <Mail className="w-5 h-5 text-yellow-600 mt-0.5" />
+              <Mail className="w-5 h-5 text-orange-600 mt-0.5" />
               <div>
-                <h3 className="font-medium text-yellow-900 mb-1">
+                <h3 className="font-medium text-orange-900 mb-1">
                   Confirme seu email para continuar
                 </h3>
-                <p className="text-sm text-yellow-700 mb-3">
+                <p className="text-sm text-orange-700 mb-3">
                   Enviamos um link de confirmação para <strong>{userEmail}</strong>. 
                   Clique no link para ativar sua conta e começar a usar o sistema.
                 </p>
@@ -211,7 +211,7 @@ export default function TrialWelcome() {
           <button
             onClick={handleGetStarted}
             disabled={!isEmailConfirmed}
-            className="bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            className="bg-orange-500 text-white px-8 py-4 rounded-lg font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
           >
             {isEmailConfirmed ? 'Começar Agora' : 'Confirme seu email primeiro'}
             {isEmailConfirmed && <ArrowRight className="w-5 h-5" />}
@@ -223,20 +223,20 @@ export default function TrialWelcome() {
         </div>
 
         {/* Trial Info */}
-        <div className="mt-12 bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-          <h3 className="font-semibold text-blue-900 mb-2">Informações do seu teste</h3>
+        <div className="mt-12 bg-zinc-50 border border-zinc-200 rounded-lg p-6 text-center">
+          <h3 className="font-semibold text-zinc-900 mb-2">Informações do seu teste</h3>
           <div className="grid md:grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="text-blue-700 font-medium">Duração:</span>
-              <div className="text-blue-900">7 dias completos</div>
+              <span className="text-zinc-700 font-medium">Duração:</span>
+              <div className="text-zinc-900">7 dias completos</div>
             </div>
             <div>
-              <span className="text-blue-700 font-medium">Plano:</span>
-              <div className="text-blue-900">Profissional</div>
+              <span className="text-zinc-700 font-medium">Plano:</span>
+              <div className="text-zinc-900">Profissional</div>
             </div>
             <div>
-              <span className="text-blue-700 font-medium">Cobrança:</span>
-              <div className="text-blue-900">Apenas após o período</div>
+              <span className="text-zinc-700 font-medium">Cobrança:</span>
+              <div className="text-zinc-900">Apenas após o período</div>
             </div>
           </div>
         </div>

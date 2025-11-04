@@ -163,7 +163,7 @@ export default function TrialSignup({ selectedPlan = 'Profissional' }: TrialSign
               <span className="text-gray-600">Voltar</span>
             </Link>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">A</span>
               </div>
               <span className="text-xl font-bold text-gray-900">AUDITE.AI</span>
@@ -299,12 +299,12 @@ export default function TrialSignup({ selectedPlan = 'Profissional' }: TrialSign
                     </div>
                   </div>
 
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <Check className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
                       <div className="text-sm">
-                        <p className="font-medium text-blue-900 mb-1">O que você ganha:</p>
-                        <ul className="text-blue-700 space-y-1">
+                        <p className="font-medium text-orange-900 mb-1">O que você ganha:</p>
+                        <ul className="text-orange-700 space-y-1">
                           <li>• 7 dias de teste gratuito completo</li>
                           <li>• Acesso a todos os recursos do plano {selectedPlan}</li>
                           <li>• Suporte técnico incluído</li>
@@ -317,15 +317,15 @@ export default function TrialSignup({ selectedPlan = 'Profissional' }: TrialSign
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-orange-500 text-white py-4 rounded-lg font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? 'Criando conta...' : 'Iniciar Teste Gratuito'}
                   </button>
 
                   <p className="text-xs text-gray-500 text-center">
                     Ao criar sua conta, você concorda com nossos{' '}
-                    <a href="#" className="text-blue-600 hover:underline">Termos de Uso</a> e{' '}
-                    <a href="#" className="text-blue-600 hover:underline">Política de Privacidade</a>
+                    <a href="#" className="text-orange-600 hover:underline">Termos de Uso</a> e{' '}
+                    <a href="#" className="text-orange-600 hover:underline">Política de Privacidade</a>
                   </p>
                 </form>
               </div>
@@ -359,8 +359,8 @@ export default function TrialSignup({ selectedPlan = 'Profissional' }: TrialSign
                   </div>
                 </div>
 
-                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="text-sm text-green-800">
+                <div className="mt-6 p-4 bg-zinc-50 border border-zinc-200 rounded-lg">
+                  <div className="text-sm text-zinc-700">
                     <strong>Garantia:</strong> Cancele antes do 7º dia e não será cobrado nada.
                   </div>
                 </div>
