@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Check, Star, Users, BarChart3, Calendar, Shield, Zap, Heart } from 'lucide-react'
 
 const plans = [
@@ -110,11 +110,12 @@ const features = [
 
 export default function LandingPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   const handleStartTrial = (planName: string) => {
     setSelectedPlan(planName)
-    // Aqui implementaremos a lógica de registro
-    console.log(`Iniciando teste gratuito do plano: ${planName}`)
+    // Navegar para a página de trial signup com o plano selecionado
+    navigate(`/trial-signup?plan=${encodeURIComponent(planName)}`)
   }
 
   return (

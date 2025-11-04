@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, ArrowLeft } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 import { supabase } from '@/lib/supabaseClient'
@@ -9,10 +9,15 @@ interface TrialSignupProps {
   selectedPlan?: string
 }
 
-export default function TrialSignup({ selectedPlan = 'Profissional' }: TrialSignupProps) {
+export default function TrialSignup({ selectedPlan: propSelectedPlan }: TrialSignupProps) {
   const navigate = useNavigate()
   const { addToast } = useToast()
+  const [searchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
+  
+  // Pegar o plano dos parâmetros de URL ou usar o prop como fallback
+  const planFromUrl = searchParams.get('plan')
+  const selectedPlan = planFromUrl || propSelectedPlan || 'Profissional'
   const [formData, setFormData] = useState({
     email: '',
     password: '',
