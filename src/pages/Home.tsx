@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { HelpCircle } from 'lucide-react'
 import DashboardCards from '@/components/DashboardCards'
 import Charts from '@/components/Charts'
+import TutorialModal from '@/components/TutorialModal'
 import { createCount, getTotalsLastCounts } from '@/lib/db'
 
 export default function Home() {
@@ -10,6 +12,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [nome, setNome] = useState('')
   const [loja, setLoja] = useState('')
+  const [showTutorial, setShowTutorial] = useState(false)
   const nav = useNavigate()
 
   useEffect(() => {
@@ -41,6 +44,13 @@ export default function Home() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Principal</h1>
         <div className="flex gap-3">
+          <button
+            onClick={() => setShowTutorial(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+          >
+            <HelpCircle className="h-4 w-4" />
+            Como usar o sistema
+          </button>
           <Link to="/contagens" className="link">Ver todas as contagens</Link>
         </div>
       </div>
@@ -50,7 +60,7 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <input className="input" placeholder="Nome da contagem" value={nome} onChange={e=>setNome(e.target.value)} />
           <input className="input" placeholder="Loja (opcional)" value={loja} onChange={e=>setLoja(e.target.value)} />
-          <button className="btn" onClick={startCount}>Iniciar contagem</button>
+          <button className="btn btn-new-count" onClick={startCount}>Iniciar contagem</button>
         </div>
       </div>
 
@@ -63,6 +73,11 @@ export default function Home() {
           <RecentCounts />
         </>
       )}
+      
+      <TutorialModal 
+        isOpen={showTutorial} 
+        onClose={() => setShowTutorial(false)} 
+      />
     </div>
   )
 }

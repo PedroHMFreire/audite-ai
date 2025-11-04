@@ -1,20 +1,57 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Settings } from 'lucide-react'
 import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
 import { supabase } from '@/lib/supabaseClient'
 import { useEffect, useState } from 'react'
+import { getUserProfile, getTrialStatusMessage, UserProfile } from '@/lib/trial'
+import { useUserPermissions, PERMISSIONS } from '@/lib/permissions'
 
 export default function Header() {
   const nav = useNavigate()
   const loc = useLocation()
   const [authed, setAuthed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session))
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setAuthed(!!session))
+    supabase.auth.getSession().then(({ data }) => {
+      setAuthed(!!data.session)
+      if (data.session) {
+        loadUserProfile()
+        checkAdminStatus()
+      }
+    })
+    
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setAuthed(!!session)
+      if (session) {
+        loadUserProfile()
+        checkAdminStatus()
+      } else {
+        setUserProfile(null)
+        setIsAdmin(false)
+      }
+    })
+    
     return () => { sub.subscription.unsubscribe() }
   }, [])
+
+  async function loadUserProfile() {
+    const profile = await getUserProfile()
+    setUserProfile(profile)
+  }
+
+  async function checkAdminStatus() {
+    try {
+      const { data } = await supabase.rpc('is_admin')
+      setIsAdmin(data === true)
+    } catch (error) {
+      console.error('Erro ao verificar admin:', error)
+      setIsAdmin(false)
+    }
+  }
 
   async function logout() {
     await supabase.auth.signOut()
@@ -25,6 +62,8 @@ export default function Header() {
   function handleMobileNavClick() {
     setMobileMenuOpen(false)
   }
+
+  const trialStatus = getTrialStatusMessage(userProfile)
 
   return (
     <>
@@ -37,10 +76,10 @@ export default function Header() {
             
             {/* Desktop Navigation - only show when authenticated and not on login */}
             {authed && loc.pathname !== '/login' && (
-              <nav className="hidden sm:flex items-center gap-4">
+              <nav className="navigation-menu hidden sm:flex items-center gap-4">
                 <Link 
                   to="/contagens" 
-                  className={`text-sm transition-colors ${
+                  className={`nav-counts text-sm transition-colors ${
                     loc.pathname.startsWith('/contagens') || loc.pathname.startsWith('/relatorio')
                       ? 'text-zinc-900 dark:text-zinc-100 font-medium' 
                       : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
@@ -50,7 +89,7 @@ export default function Header() {
                 </Link>
                 <Link 
                   to="/categorias" 
-                  className={`text-sm transition-colors ${
+                  className={`nav-categories text-sm transition-colors ${
                     loc.pathname === '/categorias'
                       ? 'text-zinc-900 dark:text-zinc-100 font-medium' 
                       : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
@@ -60,7 +99,7 @@ export default function Header() {
                 </Link>
                 <Link 
                   to="/cronograma" 
-                  className={`text-sm transition-colors ${
+                  className={`nav-schedule text-sm transition-colors ${
                     loc.pathname === '/cronograma'
                       ? 'text-zinc-900 dark:text-zinc-100 font-medium' 
                       : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
@@ -68,6 +107,21 @@ export default function Header() {
                 >
                   Cronograma
                 </Link>
+                
+                {/* Admin Dashboard Link - Only for admins */}
+                {isAdmin && (
+                  <Link 
+                    to="/admin" 
+                    className={`text-sm transition-colors flex items-center gap-1 ${
+                      loc.pathname === '/admin'
+                        ? 'text-zinc-900 dark:text-zinc-100 font-medium' 
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    <Settings className="h-3 w-3" />
+                    Admin
+                  </Link>
+                )}
               </nav>
             )}
           </div>
@@ -90,9 +144,21 @@ export default function Header() {
               </button>
             )}
             
-            {/* Desktop logout */}
+            {/* Trial Status & Desktop logout */}
             {authed && loc.pathname !== '/login' && (
-              <button className="hidden sm:block badge" onClick={logout}>Sair</button>
+              <div className="hidden sm:flex items-center gap-3">
+                {trialStatus.type === 'active' && (
+                  <span className="px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-md border border-zinc-200 dark:border-zinc-700">
+                    {trialStatus.message}
+                  </span>
+                )}
+                {trialStatus.type === 'expired' && (
+                  <span className="px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-md border border-zinc-200 dark:border-zinc-700">
+                    {trialStatus.message}
+                  </span>
+                )}
+                <button className="badge" onClick={logout}>Sair</button>
+              </div>
             )}
           </div>
         </div>
@@ -108,7 +174,7 @@ export default function Header() {
                 onClick={handleMobileNavClick}
                 className={`block p-3 rounded-lg transition-colors ${
                   loc.pathname.startsWith('/contagens') || loc.pathname.startsWith('/relatorio')
-                    ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-medium' 
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium' 
                     : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                 }`}
               >
@@ -119,7 +185,7 @@ export default function Header() {
                 onClick={handleMobileNavClick}
                 className={`block p-3 rounded-lg transition-colors ${
                   loc.pathname === '/categorias'
-                    ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-medium' 
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium' 
                     : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                 }`}
               >
@@ -130,17 +196,43 @@ export default function Header() {
                 onClick={handleMobileNavClick}
                 className={`block p-3 rounded-lg transition-colors ${
                   loc.pathname === '/cronograma'
-                    ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-medium' 
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium' 
                     : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                 }`}
               >
                 ⚙️ Cronograma
               </Link>
               
-              <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3 mt-3">
+              {/* Admin Dashboard Link - Mobile */}
+              {isAdmin && (
+                <Link 
+                  to="/admin" 
+                  onClick={handleMobileNavClick}
+                  className={`block p-3 rounded-lg transition-colors ${
+                    loc.pathname === '/admin'
+                      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium' 
+                      : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  ⚙️ Dashboard Admin
+                </Link>
+              )}
+              
+              <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3 mt-3 space-y-3">
+                {/* Trial Status in Mobile */}
+                {(trialStatus.type === 'active' || trialStatus.type === 'expired') && (
+                  <div className={`p-3 rounded-lg text-sm text-center ${
+                    trialStatus.type === 'active' || trialStatus.type === 'expired'
+                      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700'
+                  }`}>
+                    {trialStatus.message}
+                  </div>
+                )}
+                
                 <button 
                   onClick={logout}
-                  className="w-full p-3 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+                  className="w-full p-3 text-left text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                 >
                   🚪 Sair
                 </button>

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { InputValidator, SecurityLogger } from './security'
 
 export type Count = { id: string; user_id: string; store_id: string | null; nome: string; status: string | null; created_at: string }
 export type PlanItem = { id?: string; count_id: string; codigo: string; nome: string; saldo: number }
@@ -89,18 +90,39 @@ export type CategoryStats = {
 
 export async function getCurrentUserId(): Promise<string> {
   const { data } = await supabase.auth.getSession()
+  
   if (!navigator.onLine) throw new Error('Sem internet. Conecte-se e tente novamente.')
   if (!data.session?.user) throw new Error('Não autenticado. Faça login para continuar.')
-  return data.session.user.id
+  
+  const userId = data.session.user.id
+  
+  if (!InputValidator.uuid(userId)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_USER_ID', { userId })
+    throw new Error('ID de usuário inválido')
+  }
+  
+  return userId
 }
 
 export async function createCount(nome: string, storeName: string | null) {
   const user_id = await getCurrentUserId()
+  
+  // Sanitização e validação de inputs
+  const sanitizedNome = InputValidator.sanitizeText(nome)
+  if (!sanitizedNome || sanitizedNome.length < 1 || sanitizedNome.length > 100) {
+    throw new Error('Nome da contagem inválido (1-100 caracteres)')
+  }
+  
   let store_id: string | null = null
   if (storeName) {
+    const sanitizedStoreName = InputValidator.sanitizeText(storeName)
+    if (!sanitizedStoreName || sanitizedStoreName.length < 1 || sanitizedStoreName.length > 100) {
+      throw new Error('Nome da loja inválido (1-100 caracteres)')
+    }
+    
     const { data: sInsert, error: sErr } = await supabase
       .from('stores')
-      .insert({ name: storeName, user_id })
+      .insert({ name: sanitizedStoreName, user_id })
       .select('id')
       .single()
     if (sErr) throw sErr
@@ -108,7 +130,7 @@ export async function createCount(nome: string, storeName: string | null) {
   }
   const { data, error } = await supabase
     .from('counts')
-    .insert({ user_id, store_id, nome })
+    .insert({ user_id, store_id, nome: sanitizedNome })
     .select('*')
     .single()
   if (error) throw error
@@ -116,16 +138,35 @@ export async function createCount(nome: string, storeName: string | null) {
 }
 
 export async function savePlanItems(count_id: string, items: { codigo: string; nome: string; saldo: number }[]) {
+  // Validação de UUID
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID', { count_id })
+    throw new Error('ID da contagem inválido')
+  }
   if (!items || items.length === 0) {
     throw new Error('Lista de itens não pode estar vazia')
   }
   
-  const rows = items.map(r => ({ 
-    count_id, 
-    codigo: r.codigo.trim(), 
-    nome: r.nome.trim(), 
-    saldo: Math.max(0, r.saldo) 
-  }))
+  // Validação e sanitização de cada item
+  const rows = items.map(r => {
+    const sanitizedCodigo = InputValidator.sanitizeText(r.codigo.trim())
+    const sanitizedNome = InputValidator.sanitizeText(r.nome.trim())
+    
+    if (!InputValidator.productCode(sanitizedCodigo)) {
+      throw new Error(`Código de produto inválido: ${sanitizedCodigo}`)
+    }
+    
+    if (!InputValidator.quantity(r.saldo)) {
+      throw new Error(`Quantidade inválida: ${r.saldo}`)
+    }
+    
+    return { 
+      count_id, 
+      codigo: sanitizedCodigo, 
+      nome: sanitizedNome, 
+      saldo: Math.max(0, r.saldo) 
+    }
+  })
   
   const { error } = await supabase.from('plan_items').insert(rows)
   if (error) throw error
