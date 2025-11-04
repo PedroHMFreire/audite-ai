@@ -87,15 +87,15 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-zinc-900 dark:text-white">
             {mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta'}
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
             Ou{' '}
-            <Link to="/" className="font-medium text-blue-600 hover:text-blue-500">
+            <Link to="/" className="font-medium text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-500 transition-colors">
               volte para a página inicial
             </Link>
           </p>
@@ -104,7 +104,7 @@ export default function Login() {
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <input
-                className="relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="relative block w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 placeholder-zinc-500 dark:placeholder-zinc-400 text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 rounded-t-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
                 placeholder="E-mail"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -114,7 +114,7 @@ export default function Login() {
             </div>
             <div>
               <input
-                className="relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="relative block w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 placeholder-zinc-500 dark:placeholder-zinc-400 text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 rounded-b-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
                 placeholder="Senha"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -125,23 +125,23 @@ export default function Login() {
           </div>
 
           {error && (
-            <div className="rounded-md bg-zinc-50 border border-zinc-200 p-4">
-              <div className="text-sm text-zinc-700">{error}</div>
+            <div className="rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-4">
+              <div className="text-sm text-zinc-700 dark:text-zinc-300">{error}</div>
             </div>
           )}
 
           {/* Indicador de força da senha para signup */}
           {mode === 'signup' && password && (
-            <div className="rounded-md bg-gray-50 p-4">
-              <div className="text-sm font-medium text-gray-700 mb-2">Critérios de senha:</div>
+            <div className="rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-4">
+              <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Critérios de senha:</div>
               <ul className="text-xs space-y-1">
                 {passwordStrength.errors.map((err, index) => (
-                  <li key={index} className="flex items-center gap-2 text-red-600">
+                  <li key={index} className="flex items-center gap-2 text-red-600 dark:text-red-400">
                     <span>✗</span> {err}
                   </li>
                 ))}
                 {passwordStrength.valid && (
-                  <li className="flex items-center gap-2 text-green-600">
+                  <li className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
                     <span>✓</span> Senha atende todos os critérios
                   </li>
                 )}
@@ -163,7 +163,7 @@ export default function Login() {
             {mode === 'login' ? (
               <button
                 type="button"
-                className="text-blue-600 hover:text-blue-500"
+                className="text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-500 transition-colors"
                 onClick={() => setMode('signup')}
               >
                 Não tem conta? Cadastre-se
@@ -171,7 +171,7 @@ export default function Login() {
             ) : (
               <button
                 type="button"
-                className="text-blue-600 hover:text-blue-500"
+                className="text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-500 transition-colors"
                 onClick={() => setMode('login')}
               >
                 Já tem conta? Entrar
