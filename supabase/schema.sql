@@ -142,7 +142,8 @@ begin
     plan,
     trial_start,
     trial_end,
-    trial_active
+    trial_active,
+    subscription_status
   )
   values (
     new.id,
@@ -153,7 +154,8 @@ begin
     new.raw_user_meta_data->>'plan',
     (new.raw_user_meta_data->>'trial_start')::timestamp with time zone,
     (new.raw_user_meta_data->>'trial_end')::timestamp with time zone,
-    (new.raw_user_meta_data->>'trial_active')::boolean
+    coalesce((new.raw_user_meta_data->>'trial_active')::boolean, true),
+    coalesce(new.raw_user_meta_data->>'subscription_status', 'trial')
   );
   return new;
 end;

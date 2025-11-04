@@ -118,7 +118,8 @@ export default function TrialSignup({ selectedPlan = 'Profissional' }: TrialSign
             plan: selectedPlan,
             trial_start: new Date().toISOString(),
             trial_end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 dias
-            trial_active: true
+            trial_active: true,
+            subscription_status: 'trial'
           }
         }
       })
