@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { getUserProfile, getTrialStatusMessage, isTrialActive, getTrialDaysRemaining } from '@/lib/trial'
+import { getUserProfile, getTrialStatusMessage, isTrialActive, getTrialDaysRemaining, UserProfile } from '@/lib/trial'
+import type { User } from '@supabase/supabase-js'
 
 export default function TrialDebug() {
-  const [userProfile, setUserProfile] = useState(null)
-  const [authUser, setAuthUser] = useState(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [authUser, setAuthUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
