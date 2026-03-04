@@ -62,7 +62,7 @@ class PermissionManager {
       this.userRole = roleData
       return roleData
     } catch (error) {
-      console.error('Erro ao buscar role do usuário:', error)
+      console.error('Erro ao buscar role do usuario:', error)
       return null
     }
   }
@@ -119,32 +119,28 @@ class PermissionManager {
     try {
       const canManage = await this.hasPermission(PERMISSIONS.MANAGE_USERS)
       if (!canManage) {
-        throw new Error('Sem permissão para ver usuários')
+        throw new Error('Sem permissao para ver usuarios')
       }
 
-      // Busca usuários do auth
-      const { data: authUsers } = await supabase.auth.admin.listUsers()
-      if (!authUsers) return []
+      const { data, error } = await supabase.rpc('admin_list_users_with_roles')
+      if (error) throw error
+      if (!data) return []
 
-      // Busca roles dos usuários
-      const { data: userRoles } = await supabase
-        .from('user_roles')
-        .select('*')
-
-      const usersWithRoles = authUsers.users.map(user => {
-        const role = userRoles?.find(r => r.user_id === user.id)
-        return {
-          id: user.id,
-          email: user.email || '',
-          role: role?.role || 'user',
-          permissions: role?.permissions || [],
-          created_at: user.created_at
-        }
-      })
-
-      return usersWithRoles
+      return data.map((user: {
+        user_id: string
+        email: string | null
+        role: string | null
+        permissions: string[] | null
+        created_at: string
+      }) => ({
+        id: user.user_id,
+        email: user.email || '',
+        role: user.role || 'user',
+        permissions: user.permissions || [],
+        created_at: user.created_at
+      }))
     } catch (error) {
-      console.error('Erro ao buscar usuários:', error)
+      console.error('Erro ao buscar usuarios:', error)
       return []
     }
   }
@@ -152,7 +148,7 @@ class PermissionManager {
 
 export const permissionManager = PermissionManager.getInstance()
 
-// Hook React para usar permissões
+// Hook React para usar permissoes
 import { useState, useEffect } from 'react'
 
 export function useUserPermissions() {
@@ -168,7 +164,7 @@ export function useUserPermissions() {
       const userRole = await permissionManager.getCurrentUserRole()
       setRole(userRole)
     } catch (error) {
-      console.error('Erro ao carregar permissões:', error)
+      console.error('Erro ao carregar permissoes:', error)
     } finally {
       setLoading(false)
     }

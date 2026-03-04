@@ -16,7 +16,6 @@ import AdminDashboard from '@/pages/AdminDashboard'
 import LandingPage from '@/pages/LandingPage'
 import TrialSignup from '@/pages/TrialSignup'
 import TrialWelcome from '@/pages/TrialWelcome'
-import TrialDebug from '@/pages/TrialDebug'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -44,8 +43,7 @@ export default function App() {
   const location = useLocation()
   
   // Check if current route is public (landing page routes)
-  const isPublicRoute = ['/', '/trial-signup', '/trial-welcome', '/trial-debug'].includes(location.pathname)
-  const isLandingPage = location.pathname === '/'
+  const isPublicRoute = ['/', '/trial-signup', '/trial-welcome'].includes(location.pathname)
   
   return (
     <ToastProvider>
@@ -59,7 +57,6 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/trial-signup" element={<TrialSignup />} />
             <Route path="/trial-welcome" element={<TrialWelcome />} />
-            <Route path="/trial-debug" element={<TrialDebug />} />
             
             {/* Auth Route */}
             <Route path="/login" element={<Login />} />

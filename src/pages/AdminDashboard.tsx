@@ -366,7 +366,7 @@ async function getAdminMetrics(dateRange: DateRange): Promise<AdminMetrics> {
     // Busca usuários reais do sistema
     const { data: userProfiles, error: usersError } = await supabase
       .from('user_profiles')
-      .select('id, created_at, trial_active, plan')
+      .select('id, created_at, trial_active, plan, subscription_status')
 
     if (usersError) {
       console.error('Erro ao buscar usuários:', usersError)
@@ -386,7 +386,12 @@ async function getAdminMetrics(dateRange: DateRange): Promise<AdminMetrics> {
     // Calcula métricas baseado nos dados reais
     const totalUsers = userProfiles?.length || 0
     const activeTrials = userProfiles?.filter(u => u.trial_active)?.length || 0
-    const paidUsers = userProfiles?.filter(u => u.plan === 'pro')?.length || 0
+    const paidUsers = userProfiles?.filter(u => {
+      const plan = (u.plan || '').toLowerCase()
+      const subscriptionStatus = (u.subscription_status || '').toLowerCase()
+      const isPaidPlan = ['básico', 'basico', 'profissional', 'premium'].includes(plan)
+      return subscriptionStatus === 'active' || isPaidPlan
+    })?.length || 0
     const totalCounts = counts?.length || 0
 
     // Simula métricas de conversão baseado nos dados reais

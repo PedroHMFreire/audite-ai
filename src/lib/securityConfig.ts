@@ -23,7 +23,7 @@ export const SECURITY_CONFIG = {
     passwordRequireNumbers: true,
     passwordRequireSpecialChars: true,
     maxFileSize: 10 * 1024 * 1024, // 10MB
-    allowedFileTypes: ['.xlsx', '.xls', '.csv'],
+    allowedFileTypes: ['.xlsx', '.csv'],
   },
 
   // URLs permitidas para redirecionamento

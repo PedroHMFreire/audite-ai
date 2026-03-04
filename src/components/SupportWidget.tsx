@@ -55,7 +55,7 @@ const FAQ_DATA = [
   },
   {
     question: "Que formato de planilha é aceito?",
-    answer: "Aceitamos Excel (.xlsx, .xls) e CSV. A planilha deve ter 3 colunas: código do produto, nome e quantidade em estoque.",
+    answer: "Aceitamos Excel (.xlsx) e CSV. A planilha deve ter 3 colunas: codigo do produto, nome e quantidade em estoque.",
     keywords: ["formato", "excel", "csv", "planilha"],
     category: "uso-basico"
   },

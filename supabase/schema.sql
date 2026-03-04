@@ -53,6 +53,7 @@ create table if not exists public.manual_entries (
   id uuid primary key default gen_random_uuid(),
   count_id uuid references public.counts(id) on delete cascade,
   codigo text not null,
+  qty integer not null default 1,
   created_at timestamp with time zone default now()
 );
 
@@ -467,6 +468,28 @@ create policy "user_roles_admin_only" on public.user_roles
     )
   );
 
+drop policy if exists "user_profiles-admin-read" on public.user_profiles;
+create policy "user_profiles-admin-read" on public.user_profiles
+  for select using (
+    exists (
+      select 1 from public.user_roles ur
+      where ur.user_id = auth.uid()
+      and ur.role = 'admin'
+      and 'view_admin_dashboard' = any(ur.permissions)
+    )
+  );
+
+drop policy if exists "counts-admin-read" on public.counts;
+create policy "counts-admin-read" on public.counts
+  for select using (
+    exists (
+      select 1 from public.user_roles ur
+      where ur.user_id = auth.uid()
+      and ur.role = 'admin'
+      and 'view_admin_dashboard' = any(ur.permissions)
+    )
+  );
+
 -- Políticas para admin_sessions (apenas admins podem ver)
 drop policy if exists "admin_sessions_admin_only" on public.admin_sessions;
 create policy "admin_sessions_admin_only" on public.admin_sessions
@@ -547,6 +570,33 @@ begin
 end;
 $$ language plpgsql security definer;
 
+create or replace function public.admin_list_users_with_roles()
+returns table (
+  user_id uuid,
+  email text,
+  role text,
+  permissions text[],
+  created_at timestamp with time zone
+) as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Acesso negado: apenas administradores podem listar usuarios';
+  end if;
+
+  return query
+  select
+    au.id as user_id,
+    au.email,
+    coalesce(ur.role, 'user') as role,
+    coalesce(ur.permissions, '{}'::text[]) as permissions,
+    au.created_at
+  from auth.users au
+  left join public.user_roles ur on ur.user_id = au.id
+  order by au.created_at desc;
+end;
+$$ language plpgsql security definer;
+grant execute on function public.admin_list_users_with_roles() to authenticated;
+
 -- Função para atualizar cache de métricas
 create or replace function public.update_conversion_metrics_cache(
   start_date date,
@@ -580,7 +630,7 @@ begin
     and timestamp::date between start_date and end_date
   )
   select 
-    (select count(distinct user_id) from auth.users where created_at::date between start_date and end_date) as total_users,
+    (select count(distinct id) from auth.users where created_at::date between start_date and end_date) as total_users,
     (select count(*) from trials) as total_trials,
     (select count(*) from conversions) as total_conversions,
     case when (select count(*) from trials) > 0 
