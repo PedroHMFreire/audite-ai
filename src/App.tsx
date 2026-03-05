@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
+import PWAInstallPrompt from '@/components/PWAInstallPrompt'
 import AdminRoute from '@/components/AdminRoute'
 import { ToastProvider } from '@/components/Toast'
 import { OnboardingOverlay } from '@/components/Onboarding'
@@ -90,6 +91,9 @@ export default function App() {
       
       {/* Onboarding overlay - sempre no topo */}
       <OnboardingOverlay />
+      
+      {/* PWA Install Prompt - sempre visível */}
+      <PWAInstallPrompt />
     </ToastProvider>
   )
 }
