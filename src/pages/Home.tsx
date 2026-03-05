@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { HelpCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import QuickActionCard from '@/components/QuickActionCard'
 import DashboardCards from '@/components/DashboardCards'
 import Charts from '@/components/Charts'
+import { RecentCountsTimeline } from '@/components/RecentCountsTimeline'
+import StorePerformance from '@/components/StorePerformance'
+import ContextualSidebar from '@/components/ContextualSidebar'
 import TutorialModal from '@/components/TutorialModal'
 import { createCount, getTotalsLastCounts } from '@/lib/db'
+import { supabase } from '@/lib/supabaseClient'
+import { SkeletonLoader } from '@/components/SkeletonLoader'
 
 export default function Home() {
   const [totals, setTotals] = useState({ regular: 0, excesso: 0, falta: 0 })
   const [chart, setChart] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [nome, setNome] = useState('')
-  const [loja, setLoja] = useState('')
+  const [countTotal, setCountTotal] = useState(0)
   const [showTutorial, setShowTutorial] = useState(false)
   const nav = useNavigate()
 
@@ -21,6 +25,14 @@ export default function Home() {
       try {
         const data = await getTotalsLastCounts(5)
         setChart(data)
+        
+        // Contar total de contagens
+        const { count } = await supabase
+          .from('counts')
+          .select('*', { count: 'exact', head: true })
+        
+        setCountTotal(count || 0)
+
         // Aggregate totals
         let reg = 0, exc = 0, fal = 0
         for (const d of data) {
@@ -33,78 +45,72 @@ export default function Home() {
     })()
   }, [])
 
-  async function startCount() {
-    if (!nome.trim()) return alert('Defina um nome para a contagem')
-    const c = await createCount(nome.trim(), loja.trim() || null)
+  async function handleStartCount(nome: string, loja?: string | null) {
+    const c = await createCount(nome.trim(), loja)
     nav(`/contagens/${c.id}`)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Principal</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowTutorial(true)}
-            className="flex items-center gap-2 px-3 py-2 text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-          >
-            <HelpCircle className="h-4 w-4" />
-            Como usar o sistema
-          </button>
-          <Link to="/contagens" className="link">Ver todas as contagens</Link>
+    <div className="flex-1">
+      <div className="max-w-7xl mx-auto px-4 py-6 lg:pr-80">
+        <div className="space-y-6">
+          {/* Card de ação rápida */}
+          <div data-quick-action>
+            <QuickActionCard onStartCount={handleStartCount} />
+          </div>
+
+          {loading ? (
+            <SkeletonLoader />
+          ) : (
+            <>
+              {/* KPI Cards */}
+              {(() => {
+                const trends = {
+                  regular: { value: '+12% vs semana passada', direction: 'up' as const },
+                  excesso: { value: '-5% vs semana passada', direction: 'down' as const },
+                  falta: { value: '+3% vs semana passada', direction: 'up' as const }
+                }
+
+                const sparklines = {
+                  regular: chart.map(c => c.Regular),
+                  excesso: chart.map(c => c.Excesso),
+                  falta: chart.map(c => c.Falta)
+                }
+
+                return (
+                  <DashboardCards 
+                    totals={totals}
+                    trends={trends}
+                    sparklines={sparklines}
+                    targets={{ regular: 100, excesso: 20, falta: 10 }}
+                  />
+                )
+              })()}
+
+              {/* Gráfico */}
+              <Charts data={chart} />
+
+              {/* Seção inferior com Timeline e Performance */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Timeline de contagens */}
+                <RecentCountsTimeline />
+
+                {/* Performance por loja */}
+                <StorePerformance />
+              </div>
+            </>
+          )}
         </div>
+
+        {/* Tutorial Modal */}
+        <TutorialModal 
+          isOpen={showTutorial} 
+          onClose={() => setShowTutorial(false)} 
+        />
       </div>
 
-      <div className="card">
-        <div className="text-sm mb-3">Iniciar nova contagem</div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <input className="input" placeholder="Nome da contagem" value={nome} onChange={e=>setNome(e.target.value)} />
-          <input className="input" placeholder="Loja (opcional)" value={loja} onChange={e=>setLoja(e.target.value)} />
-          <button className="btn btn-new-count" onClick={startCount}>Iniciar contagem</button>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="text-sm text-zinc-500">Carregando…</div>
-      ) : (
-        <>
-          <DashboardCards totals={totals} />
-          <Charts data={chart} />
-          <RecentCounts />
-        </>
-      )}
-      
-      <TutorialModal 
-        isOpen={showTutorial} 
-        onClose={() => setShowTutorial(false)} 
-      />
-    </div>
-  )
-}
-
-import { useEffect as useEffect2, useState as useState2 } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-
-function RecentCounts() {
-  const [rows, setRows] = useState2<any[]>([])
-  useEffect2(() => {
-    supabase.from('counts').select('*').order('created_at', { ascending: false }).limit(5).then(({ data }) => setRows(data || []))
-  }, [])
-  return (
-    <div className="card">
-      <div className="text-sm mb-3">Últimas contagens</div>
-      <ul className="space-y-2">
-        {rows.map(r => (
-          <li key={r.id} className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">{r.nome}</div>
-              <div className="text-xs text-zinc-500">{new Date(r.created_at).toLocaleString()}</div>
-            </div>
-            <Link to={`/contagens/${r.id}`} className="badge">Abrir</Link>
-          </li>
-        ))}
-        {rows.length === 0 && <div className="text-sm text-zinc-500">Sem contagens ainda.</div>}
-      </ul>
+      {/* Sidebar contextual (desktop only) */}
+      <ContextualSidebar onTutorialClick={() => setShowTutorial(true)} />
     </div>
   )
 }

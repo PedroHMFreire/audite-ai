@@ -21,22 +21,22 @@ export default function ManualEntry({ onAdd }: { onAdd: (codigo: string, qty?: n
   }
 
   return (
-    <form onSubmit={submit} className="grid grid-cols-3 gap-2 items-center">
+    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-center">
       <input
         ref={inputRef}
         value={code}
         onChange={e => setCode(e.target.value)}
         placeholder="Código"
-        className="input col-span-2"
+        className="input col-span-1 sm:col-span-1 lg:col-span-2"
       />
       <input
         value={qty}
         onChange={e => setQty(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
         placeholder="Qtd (opcional)"
         inputMode="numeric"
-        className="input"
+        className="input col-span-1"
       />
-      <button className="btn col-span-3" type="submit">Adicionar</button>
+      <button className="btn col-span-1 sm:col-span-2 lg:col-span-3" type="submit">Adicionar</button>
     </form>
   )
 }

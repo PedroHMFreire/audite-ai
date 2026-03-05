@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { InputValidator } from './security'
 
 export interface UserProfile {
   id: string
@@ -24,7 +25,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
       .from('user_profiles')
       .select('*')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     if (error) {
       console.error('Error fetching user profile:', error)
@@ -91,11 +92,18 @@ export async function updateTrialStatus(subscriptionStatus: string): Promise<boo
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return false
 
+    // Valida o status de subscrição
+    if (!InputValidator.subscriptionStatus(subscriptionStatus)) {
+      console.error('Invalid subscription status:', subscriptionStatus)
+      throw new Error(`Status de subscrição inválido: ${subscriptionStatus}. Valores permitidos: trial, active, cancelled, expired, suspended`)
+    }
+
+    const normalizedStatus = subscriptionStatus.toLowerCase()
     const { error } = await supabase
       .from('user_profiles')
       .update({
-        subscription_status: subscriptionStatus,
-        trial_active: subscriptionStatus === 'trial',
+        subscription_status: normalizedStatus,
+        trial_active: normalizedStatus === 'trial',
         updated_at: new Date().toISOString()
       })
       .eq('id', user.id)

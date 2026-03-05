@@ -118,7 +118,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
         transform transition-all duration-300 ease-in-out
         ${isVisible && !isLeaving ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
         ${getTypeClasses()}
-        rounded-lg border shadow-lg p-3 mb-2 cursor-pointer
+        rounded-lg border shadow-lg p-3 cursor-pointer
         hover:scale-105 active:scale-95
         max-w-sm w-full
       `}
@@ -151,12 +151,10 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
   if (toasts.length === 0) return null
 
   return (
-    <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 pointer-events-none">
-      <div className="pointer-events-auto space-y-2 max-w-sm ml-auto">
-        {toasts.map(toast => (
-          <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
-        ))}
-      </div>
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto w-full max-w-sm px-4">
+      {toasts.map(toast => (
+        <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
+      ))}
     </div>
   )
 }

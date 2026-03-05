@@ -67,16 +67,26 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white/75 dark:bg-zinc-950/75 backdrop-blur border-b border-zinc-100 dark:border-zinc-900">
+      <header className="sticky top-0 z-50 bg-white/75 dark:bg-zinc-950/75 backdrop-blur border-b border-zinc-100 dark:border-zinc-900" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
         <div className="max-w-3xl mx-auto px-4 sm:px-6 md:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link to="/" className="flex items-center gap-3" onClick={handleMobileNavClick}>
+            <Link to="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity" onClick={handleMobileNavClick}>
               <Logo />
             </Link>
             
             {/* Desktop Navigation - only show when authenticated and not on login */}
             {authed && loc.pathname !== '/login' && (
               <nav className="navigation-menu hidden sm:flex items-center gap-4">
+                <Link 
+                  to="/dashboard" 
+                  className={`nav-home text-sm transition-colors ${
+                    loc.pathname === '/dashboard'
+                      ? 'text-zinc-900 dark:text-zinc-100 font-medium' 
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  }`}
+                >
+                  Home
+                </Link>
                 <Link 
                   to="/contagens" 
                   className={`nav-counts text-sm transition-colors ${
@@ -169,6 +179,17 @@ export default function Header() {
         <div className="sm:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setMobileMenuOpen(false)}>
           <nav className="absolute top-14 left-0 right-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shadow-lg">
             <div className="max-w-3xl mx-auto px-4 py-4 space-y-3">
+              <Link 
+                to="/dashboard" 
+                onClick={handleMobileNavClick}
+                className={`block p-3 rounded-lg transition-colors ${
+                  loc.pathname === '/dashboard'
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium' 
+                    : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                🏠 Home
+              </Link>
               <Link 
                 to="/contagens" 
                 onClick={handleMobileNavClick}

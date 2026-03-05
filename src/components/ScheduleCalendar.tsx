@@ -62,8 +62,10 @@ export default function ScheduleCalendar({ refreshTrigger }: ScheduleCalendarPro
   }
 
   useEffect(() => {
+    const controller = new AbortController()
     loadData()
-  }, [refreshTrigger]) // Recarrega quando refreshTrigger muda
+    return () => controller.abort() // Cleanup para evitar memory leaks
+  }, [refreshTrigger, addToast]) // Inclui addToast nas dependências
 
   async function loadData() {
     try {

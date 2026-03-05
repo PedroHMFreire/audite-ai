@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useToast } from '@/components/Toast'
 import ScheduleCalendar from '@/components/ScheduleCalendar'
+import SchedulePredictiveWidget from '@/components/SchedulePredictiveWidget'
+import TemplateSelect from '@/components/TemplateSelect'
+import AnomalyAlerts from '@/components/AnomalyAlerts'
 import {
   getCategories,
   getScheduleConfigs,
@@ -12,6 +15,7 @@ import {
   type Category,
   type ScheduleConfig
 } from '@/lib/db'
+import { type ScheduleTemplate } from '@/lib/scheduleTemplates'
 
 const WEEKDAY_LABELS = {
   1: 'Segunda',
@@ -35,6 +39,10 @@ export default function ScheduleConfig() {
   const [editingConfig, setEditingConfig] = useState<ScheduleConfig | null>(null)
   const [deletingConfig, setDeletingConfig] = useState<ScheduleConfig | null>(null)
   const [deleting, setDeleting] = useState(false)
+  
+  // Estados para templates
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<ScheduleTemplate | null>(null)
   
   // Form state
   const [formData, setFormData] = useState({
@@ -138,6 +146,19 @@ export default function ScheduleConfig() {
 
     return true
   }, [formData, categories, addToast])
+
+  const handleTemplateSelect = useCallback((config: Partial<ScheduleConfig>, template: ScheduleTemplate) => {
+    setFormData({
+      name: config.name || '',
+      description: config.description || '',
+      sectors_per_week: config.sectors_per_week || 4,
+      start_date: config.start_date || formData.start_date,
+      total_weeks: config.total_weeks || 4,
+      work_days: config.work_days || [1, 2, 3, 4, 5]
+    })
+    setSelectedTemplate(template)
+    setShowTemplateSelector(false)
+  }, [formData.start_date])
 
   const handleCreateAndGenerate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
@@ -313,6 +334,38 @@ export default function ScheduleConfig() {
         </div>
       </div>
 
+      {/* PHASE 1: Dashboard Preditivo */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <SchedulePredictiveWidget />
+        </div>
+        <div>
+          <AnomalyAlerts />
+        </div>
+      </div>
+
+      {/* Seletor de Templates */}
+      {showTemplateSelector && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 w-full max-w-2xl my-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Selecionar Template</h2>
+              <button
+                onClick={() => setShowTemplateSelector(false)}
+                className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                ✕
+              </button>
+            </div>
+            <TemplateSelect 
+              onSelect={handleTemplateSelect}
+              selectedId={selectedTemplate?.id}
+              loading={generating}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Categories Summary */}
       <div className="card">
         <div className="flex items-center justify-between mb-3">
@@ -352,7 +405,14 @@ export default function ScheduleConfig() {
       {/* Create New Schedule Form */}
       <div className="card">
         <form onSubmit={handleCreateAndGenerate} className="space-y-4">
-          <h3 className="font-medium">Novo Cronograma</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium">Novo Cronograma</h3>
+            {selectedTemplate && (
+              <span className="text-xs px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full flex items-center gap-1">
+                📋 {selectedTemplate.name}
+              </span>
+            )}
+          </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -404,7 +464,7 @@ export default function ScheduleConfig() {
                 value={formData.sectors_per_week}
                 onChange={e => setFormData(prev => ({ 
                   ...prev, 
-                  sectors_per_week: e.target.value === '' ? 1 : Math.max(1, parseInt(e.target.value) || 1) 
+                  sectors_per_week: e.target.value === '' ? 1 : Math.min(Math.min(10, categories.length), Math.max(1, parseInt(e.target.value) || 1)) 
                 }))}
               />
             </div>
@@ -471,6 +531,24 @@ export default function ScheduleConfig() {
             disabled={generating || categories.length === 0}
           >
             {generating ? '🎲 Gerando Cronograma...' : '🎲 Criar e Gerar Cronograma'}
+          </button>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white dark:bg-zinc-900 text-zinc-500">ou</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowTemplateSelector(true)}
+            className="btn-secondary w-full"
+            disabled={generating}
+          >
+            ✨ Usar Template Inteligente
           </button>
         </form>
       </div>

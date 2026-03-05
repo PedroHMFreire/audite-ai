@@ -149,11 +149,11 @@ export default function LandingPage() {
       <section className="py-20 bg-gradient-to-br from-zinc-50 to-zinc-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-zinc-900 mb-6">
+            <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-zinc-900 mb-6">
               Controle de Estoque
               <span className="text-orange-500 block">Inteligente e Automático</span>
             </h1>
-            <p className="text-xl text-zinc-600 mb-8 max-w-3xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl text-zinc-600 mb-8 max-w-3xl mx-auto">
               Pare de perder dinheiro com estoque desorganizado. O AUDITE.AI automatiza suas contagens 
               e gera relatórios precisos para sua loja crescer com segurança.
             </p>
@@ -260,10 +260,10 @@ export default function LandingPage() {
                 )}
                 
                 <div className="text-center mb-8">
-                  <h3 className="text-2xl font-bold text-zinc-900 mb-2">{plan.name}</h3>
-                  <p className="text-zinc-600 mb-4">{plan.description}</p>
+                  <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 mb-2">{plan.name}</h3>
+                  <p className="text-sm sm:text-base text-zinc-600 mb-4">{plan.description}</p>
                   <div className="mb-4">
-                    <span className="text-4xl font-bold text-zinc-900">R$ {plan.price}</span>
+                    <span className="text-3xl sm:text-4xl font-bold text-zinc-900">R$ {plan.price}</span>
                     <span className="text-zinc-600">/{plan.period}</span>
                   </div>
                 </div>

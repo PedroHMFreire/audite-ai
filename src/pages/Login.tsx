@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useNavigate, Link } from 'react-router-dom'
 import { InputValidator, rateLimiter, SecurityLogger } from '@/lib/security'
+import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter'
+import { FormField } from '@/components/FormField'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -101,59 +103,42 @@ export default function Login() {
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={submit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <input
-                className="relative block w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 placeholder-zinc-500 dark:placeholder-zinc-400 text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 rounded-t-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
-                placeholder="E-mail"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                type="email"
-                required
-              />
-            </div>
-            <div>
-              <input
-                className="relative block w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 placeholder-zinc-500 dark:placeholder-zinc-400 text-zinc-900 dark:text-white bg-white dark:bg-zinc-800 rounded-b-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
-                placeholder="Senha"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                type="password"
-                required
-              />
-            </div>
-          </div>
+          <FormField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            placeholder="seu@email.com"
+            error={error && error.includes('email') ? 'Email inválido' : undefined}
+            hint="Usaremos seu email para acessar a conta"
+          />
 
-          {error && (
-            <div className="rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-4">
-              <div className="text-sm text-zinc-700 dark:text-zinc-300">{error}</div>
-            </div>
-          )}
+          <FormField
+            label="Senha"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            placeholder="Sua senha"
+            error={error && !error.includes('email') ? error : undefined}
+            hint={mode === 'signup' 
+              ? 'Mínimo 8 caracteres, 1 maiúscula, 1 número, 1 caractere especial'
+              : undefined
+            }
+          />
 
-          {/* Indicador de força da senha para signup */}
-          {mode === 'signup' && password && (
-            <div className="rounded-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-4">
-              <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Critérios de senha:</div>
-              <ul className="text-xs space-y-1">
-                {passwordStrength.errors.map((err, index) => (
-                  <li key={index} className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                    <span>✗</span> {err}
-                  </li>
-                ))}
-                {passwordStrength.valid && (
-                  <li className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
-                    <span>✓</span> Senha atende todos os critérios
-                  </li>
-                )}
-              </ul>
-            </div>
+          {/* Password Strength Feedback */}
+          {mode === 'signup' && (
+            <PasswordStrengthMeter 
+              password={password}
+              strength={passwordStrength}
+            />
           )}
 
           <div>
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50"
+              className="btn btn-primary w-full"
             >
               {loading ? 'Processando...' : (mode === 'login' ? 'Entrar' : 'Criar conta')}
             </button>

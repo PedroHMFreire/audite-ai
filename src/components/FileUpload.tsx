@@ -57,8 +57,11 @@ export default function FileUpload({ onParsed }: { onParsed: (rows: Item[]) => v
 
   return (
     <label className="block">
-      <span className="text-sm">Planilha (.xlsx ou .csv com colunas: codigo | nome | saldo)</span>
-      <input type="file" accept=".xlsx,.csv" onChange={handleFile} className="mt-2 block w-full text-sm file:btn file:py-2 file:px-3 file:mr-3 file:border-0 file:rounded-xl" />
+      <div className="space-y-1">
+        <span className="text-sm font-medium">Carregar planilha</span>
+        <span className="text-xs text-zinc-500 dark:text-zinc-400 block">Formato: .xlsx ou .csv (código | nome | saldo)</span>
+      </div>
+      <input type="file" accept=".xlsx,.csv" onChange={handleFile} className="mt-3 block w-full text-sm file:btn file:py-2 file:px-3 file:mr-3 file:border-0 file:rounded-xl" />
     </label>
   )
 }

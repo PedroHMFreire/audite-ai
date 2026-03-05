@@ -59,8 +59,10 @@ export default function ScheduleCalendar() {
   }
 
   useEffect(() => {
+    const controller = new AbortController()
     loadData()
-  }, [])
+    return () => controller.abort() // Cleanup para evitar memory leaks
+  }, [addToast]) // Inclui addToast nas dependências
 
   async function loadData() {
     try {
@@ -113,8 +115,10 @@ export default function ScheduleCalendar() {
   }
 
   function getItemsForDate(date: Date): ScheduleItemWithCategory[] {
+    // Usa comparação de string para evitar problemas de timezone
+    const dateStr = date.toISOString().split('T')[0]
     return scheduleItems.filter(item => 
-      isSameDay(new Date(item.scheduled_date), date)
+      item.scheduled_date === dateStr
     )
   }
 
@@ -290,12 +294,10 @@ export default function ScheduleCalendar() {
         <div className="p-4 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
           <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {scheduleItems.filter(item => {
-              const itemDate = new Date(item.scheduled_date)
-              const currentMonth = currentDate.getMonth()
-              const currentYear = currentDate.getFullYear()
-              return itemDate.getMonth() === currentMonth && 
-                     itemDate.getFullYear() === currentYear &&
-                     item.status === 'pending'
+              const itemDate = item.scheduled_date.substring(0, 7) // YYYY-MM
+              const currentDate_str = currentDate.getFullYear() + '-' + 
+                String(currentDate.getMonth() + 1).padStart(2, '0')
+              return itemDate === currentDate_str && item.status === 'pending'
             }).length}
           </div>
           <div className="text-sm text-zinc-600 dark:text-zinc-400">Contagens agendadas este mês</div>
@@ -304,12 +306,10 @@ export default function ScheduleCalendar() {
         <div className="p-4 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
           <div className="text-2xl font-bold text-green-600 dark:text-green-400">
             {scheduleItems.filter(item => {
-              const itemDate = new Date(item.scheduled_date)
-              const currentMonth = currentDate.getMonth()
-              const currentYear = currentDate.getFullYear()
-              return itemDate.getMonth() === currentMonth && 
-                     itemDate.getFullYear() === currentYear &&
-                     item.status === 'completed'
+              const itemDate = item.scheduled_date.substring(0, 7) // YYYY-MM
+              const currentDate_str = currentDate.getFullYear() + '-' + 
+                String(currentDate.getMonth() + 1).padStart(2, '0')
+              return itemDate === currentDate_str && item.status === 'completed'
             }).length}
           </div>
           <div className="text-sm text-zinc-600 dark:text-zinc-400">Contagens concluídas este mês</div>

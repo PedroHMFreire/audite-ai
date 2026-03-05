@@ -3,6 +3,8 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import FileUpload from '@/components/FileUpload'
 import ManualEntry from '@/components/ManualEntry'
 import { useToast } from '@/components/Toast'
+import ConfirmFinalizationModal from '@/components/ConfirmFinalizationModal'
+import CoverageProgressBar from '@/components/CoverageProgressBar'
 import {
   addManualEntry,
   computeAndSaveResults,
@@ -26,12 +28,13 @@ export default function CountDetail() {
   const [count, setCount] = useState<Count | null>(null)
   const [plan, setPlan] = useState<PlanRow[]>([])
   const [entries, setEntries] = useState<Entry[]>([])
-  const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editCode, setEditCode] = useState<string>('')
   const [editQty, setEditQty] = useState<number>(1)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   // Validação de UUID
   const isValidUUID = (uuid: string) => {
@@ -123,7 +126,24 @@ export default function CountDetail() {
     try {
       setPlan(items)
       
-      // Sobrescreve a planilha desta contagem
+      // Validar que count pertence ao usuário antes de deletar
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session?.user?.id) {
+        throw new Error('Usuário não autenticado')
+      }
+
+      const { data: countData, error: countError } = await supabase
+        .from('counts')
+        .select('id')
+        .eq('id', id)
+        .eq('user_id', session.user.id)
+        .single()
+
+      if (countError || !countData) {
+        throw new Error('Você não tem permissão para modificar esta contagem')
+      }
+
+      // Agora sim delete com segurança
       await supabase.from('plan_items').delete().eq('count_id', id)
       await savePlanItems(id, items)
       
@@ -271,29 +291,78 @@ export default function CountDetail() {
   }, [plan, entries])
 
   const finalizar = useCallback(async () => {
-    if (!id) return
+    if (!id) {
+      console.error('❌ Erro: ID da contagem está vazio')
+      addToast({
+        type: 'error',
+        message: 'Erro interno',
+        description: 'ID da contagem não encontrado'
+      })
+      return
+    }
     
-    setSaving(true)
+    console.log('🔄 Iniciando finalização da contagem...', { count_id: id })
+    setIsProcessing(true)
+    
     try {
-      await computeAndSaveResults(id)
+      console.log('📊 Calculando resultados...')
+      const results = await computeAndSaveResults(id)
+      
+      console.log(`✓ Contagem finalizada com sucesso! ${results.length} resultados salvos`)
       addToast({
         type: 'success',
         message: 'Contagem finalizada!',
-        description: 'Redirecionando para o relatório...'
+        description: `${results.length} itens processados. Redirecionando...`
       })
-      nav(`/relatorio/${id}`)
+      
+      // Aguarda um pouco para o toast aparecer antes de navegar
+      setTimeout(() => {
+        nav(`/relatorio/${id}`)
+      }, 1000)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao finalizar contagem'
+      const message = err instanceof Error ? err.message : 'Erro desconhecido ao finalizar contagem'
+      console.error('❌ Erro ao finalizar:', message, err)
+      
       addToast({
         type: 'error',
         message: 'Erro ao finalizar contagem',
         description: message
       })
-      console.error('Erro ao finalizar:', err)
     } finally {
-      setSaving(false)
+      setIsProcessing(false)
+      setShowConfirmModal(false)
     }
   }, [id, nav, addToast])
+
+  const handleFinalizarClick = useCallback(() => {
+    console.log('🔍 Validando antes de finalizar...', { planCodes: totals.planCodes, entradas: entries.length })
+    
+    // Validação 1: Verifica se há planilha carregada
+    if (plan.length === 0) {
+      console.warn('⚠️ Validação falhou: Planilha vazia')
+      addToast({
+        type: 'error',
+        message: 'Planilha não carregada',
+        description: 'Envie a planilha de códigos antes de finalizar'
+      })
+      return
+    }
+
+    // Validação 2: Verifica se há itens inseridos
+    if (entries.length === 0) {
+      console.warn('⚠️ Validação falhou: Nenhum item inserido')
+      addToast({
+        type: 'error',
+        message: 'Nenhum item inserido',
+        description: 'Insira pelo menos um item antes de finalizar'
+      })
+      return
+    }
+
+    // Todas as validações passaram
+    console.log('✓ Validações passaram. Abrindo modal de confirmação...')
+    setShowConfirmModal(true)
+  }, [plan, entries, addToast, totals])
 
   // Verifica se componente ainda está montado antes de atualizar estado
   useEffect(() => {
@@ -348,8 +417,16 @@ export default function CountDetail() {
         </div>
       </div>
 
-      {/* NOVO: Resumo de quantidades (mobile-first) */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Barra de cobertura com status detalhado */}
+      <CoverageProgressBar
+        planCodes={totals.planCodes}
+        insertedCodes={totals.insertedCodes}
+        planItems={totals.planItems}
+        insertedItems={totals.insertedItems}
+      />
+
+      {/* Resumo de quantidades (mobile-first) - Cards compactos */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card">
           <div className="text-xs text-zinc-500">Planilha • Códigos</div>
           <div className="text-2xl font-semibold">{totals.planCodes}</div>
@@ -369,55 +446,101 @@ export default function CountDetail() {
       </div>
 
       {/* Cards de categoria (mantidos) */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="card"><div className="text-xs text-zinc-500">Regulares</div><div className="text-2xl font-semibold">{stats.reg}</div></div>
         <div className="card"><div className="text-xs text-zinc-500">Excesso</div><div className="text-2xl font-semibold">{stats.exc}</div></div>
         <div className="card"><div className="text-xs text-zinc-500">Falta</div><div className="text-2xl font-semibold">{stats.fal}</div></div>
       </div>
 
       <div className="card">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-sm">Itens inseridos</div>
-          <div className="text-xs text-zinc-500">Mais recentes primeiro</div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Itens Inseridos</h3>
+          <div className="text-xs text-zinc-500 dark:text-zinc-400">Mais recentes primeiro</div>
         </div>
-        <ul className="max-h-80 overflow-auto text-sm divide-y divide-zinc-100 dark:divide-zinc-800">
-          {entries.map((e) => (
-            <li key={e.id} className="py-2 flex items-center gap-2">
-              {editingId === e.id ? (
-                <>
-                  <input className="input" value={editCode} onChange={ev=>setEditCode(ev.target.value)} />
-                  <input 
-                    className="input w-24" 
-                    type="number"
-                    min="1"
-                    value={editQty} 
-                    onChange={ev=>setEditQty(ev.target.value === '' ? 1 : Math.max(1, Number(ev.target.value) || 1))} 
-                  />
-                  <button className="badge" onClick={saveEdit}>Salvar</button>
-                  <button className="badge" onClick={cancelEdit}>Cancelar</button>
-                </>
-              ) : (
-                <>
-                  <div className="flex-1">
-                    <div className="font-medium">{e.codigo}</div>
-                    <div className="text-xs text-zinc-500">Qtd: {e.qty || 1} • {new Date(e.created_at).toLocaleString()}</div>
+        <ul className="max-h-80 overflow-auto text-sm divide-y divide-zinc-100 dark:divide-zinc-800 rounded-lg border border-zinc-100 dark:border-zinc-800">
+          {entries.map((e, idx) => {
+            const striped = idx % 2 === 0
+            return (
+              <li 
+                key={e.id} 
+                className={`py-3 px-4 flex items-center gap-3 transition-colors ${
+                  striped 
+                    ? 'bg-white dark:bg-zinc-900' 
+                    : 'bg-zinc-50 dark:bg-zinc-800/50'
+                } hover:bg-zinc-100 dark:hover:bg-zinc-700`}
+              >
+                {editingId === e.id ? (
+                  <div className="flex items-center gap-2 flex-1">
+                    <input 
+                      className="input text-sm flex-1" 
+                      value={editCode} 
+                      onChange={ev=>setEditCode(ev.target.value)}
+                      autoFocus
+                    />
+                    <input 
+                      className="input text-sm w-20" 
+                      type="number"
+                      min="1"
+                      value={editQty} 
+                      onChange={ev=>setEditQty(ev.target.value === '' ? 1 : Math.max(1, Number(ev.target.value) || 1))} 
+                    />
+                    <button className="badge bg-green-600 hover:bg-green-700 text-white text-xs" onClick={saveEdit}>✓</button>
+                    <button className="badge bg-zinc-400 hover:bg-zinc-500 text-white text-xs" onClick={cancelEdit}>✕</button>
                   </div>
-                  <button className="badge" onClick={()=>startEdit(e)}>Editar</button>
-                  <button className="badge" onClick={()=>removeEntry(e.id)}>Remover</button>
-                </>
-              )}
+                ) : (
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono font-semibold text-zinc-900 dark:text-white">{e.codigo}</div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        Qtd: <span className="font-medium">{e.qty || 1}</span> • {new Date(e.created_at).toLocaleTimeString()}
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <button 
+                        className="badge bg-blue-600 hover:bg-blue-700 text-white text-xs px-2" 
+                        onClick={()=>startEdit(e)}
+                        title="Editar este item"
+                      >
+                        Editar
+                      </button>
+                      <button 
+                        className="badge bg-red-600 hover:bg-red-700 text-white text-xs px-2" 
+                        onClick={()=>removeEntry(e.id)}
+                        title="Remover este item"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            )
+          })}
+          {entries.length === 0 && (
+            <li className="py-6 px-4 text-center text-zinc-500 dark:text-zinc-400 italic">
+              Nenhum item inserido ainda
             </li>
-          ))}
-          {entries.length === 0 && <div className="text-zinc-500 p-2">Nenhuma inserção nesta contagem.</div>}
+          )}
         </ul>
       </div>
 
       <div className="flex gap-3">
-        <button className="btn" onClick={finalizar} disabled={saving}>
-          {saving ? 'Processando…' : 'Finalizar contagem'}
+        <button className="btn" onClick={handleFinalizarClick} disabled={isProcessing}>
+          {isProcessing ? 'Processando…' : 'Finalizar contagem'}
         </button>
         <Link to="/" className="badge">Voltar</Link>
       </div>
+
+      <ConfirmFinalizationModal
+        isOpen={showConfirmModal}
+        planCodes={totals.planCodes}
+        planItems={totals.planItems}
+        insertedCodes={totals.insertedCodes}
+        insertedItems={totals.insertedItems}
+        loading={isProcessing}
+        onConfirm={finalizar}
+        onCancel={() => setShowConfirmModal(false)}
+      />
     </div>
   )
 }

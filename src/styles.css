@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,31 +7,341 @@
 :root {
   --card: 255 255 255;
   --card-foreground: 15 23 42;
+  
+  /* Design Tokens */
+  --color-primary: #FF6B35;
+  --color-primary-hover: #E55A28;
+  --color-primary-light: #FFE8D6;
+  
+  --color-secondary: #004E89;
+  --color-secondary-light: #E8F1F5;
+  
+  --color-success: #06B6D4;
+  --color-warning: #FBBF24;
+  --color-danger: #EF4444;
 }
+
 .dark {
   --card: 9 9 11;
   --card-foreground: 241 245 249;
 }
 
 body {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans, 'Inter', system-ui, sans-serif);
+  @apply bg-zinc-50 dark:bg-zinc-950 text-slate-900 dark:text-slate-50;
 }
 
+/* Componente Base: Card */
 .card {
-  @apply rounded-2xl p-4 shadow-sm bg-white text-slate-900 dark:bg-zinc-900 dark:text-slate-50 border border-zinc-100 dark:border-zinc-800;
+  @apply rounded-2xl p-4 shadow-sm 
+         bg-white text-slate-900 
+         dark:bg-zinc-900 dark:text-slate-50 
+         border border-zinc-100 dark:border-zinc-800
+         transition-all duration-200;
 }
+
+.card:hover {
+  @apply shadow-md border-zinc-200 dark:border-zinc-700;
+}
+
+/* Componente Base: Button */
 .btn {
-  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium bg-zinc-900 text-white hover:bg-zinc-800 active:scale-[.99] dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100;
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 
+         font-medium font-sans text-sm
+         bg-zinc-900 text-white 
+         hover:bg-zinc-800 
+         active:scale-[.98] 
+         disabled:opacity-50 disabled:cursor-not-allowed
+         dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100
+         transition-all duration-200;
 }
+
+.btn-primary {
+  @apply bg-primary-500 text-white hover:bg-primary-600;
+}
+
+.btn-secondary {
+  @apply bg-secondary-500 text-white hover:bg-secondary-600;
+}
+
+.btn-ghost {
+  @apply bg-transparent border border-zinc-300 text-zinc-900 
+         hover:bg-zinc-100 dark:border-zinc-700 dark:text-white 
+         dark:hover:bg-zinc-800;
+}
+
+.btn-sm {
+  @apply px-3 py-1.5 text-sm;
+}
+
+.btn-lg {
+  @apply px-6 py-3 text-base;
+}
+
+/* Componente Base: Input */
 .input {
-  @apply w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-300 dark:focus:ring-zinc-700;
+  @apply w-full rounded-xl border border-zinc-200 dark:border-zinc-800 
+         bg-white dark:bg-zinc-900 px-3 py-2 
+         outline-none focus:ring-2 focus:ring-primary-500 
+         dark:focus:ring-primary-400 text-slate-900 dark:text-slate-50
+         placeholder:text-zinc-400 dark:placeholder:text-zinc-600
+         transition-all duration-200;
 }
+
+.input-error {
+  @apply border-danger focus:ring-danger;
+}
+
+.input-success {
+  @apply border-success focus:ring-success;
+}
+
+/* Componente Base: Link */
 .link {
-  @apply text-zinc-900 dark:text-white underline underline-offset-4;
+  @apply text-primary-500 hover:text-primary-600 
+         underline underline-offset-4
+         dark:text-primary-400 dark:hover:text-primary-300
+         transition-colors duration-200;
 }
+
+/* Componente Base: Badge */
 .badge {
-  @apply inline-flex items-center gap-2 rounded-full text-xs px-3 py-1 border border-zinc-200 dark:border-zinc-700;
+  @apply inline-flex items-center gap-2 rounded-full text-xs px-3 py-1.5 
+         border border-zinc-200 dark:border-zinc-700
+         bg-zinc-50 dark:bg-zinc-800
+         text-zinc-700 dark:text-zinc-300
+         font-medium;
 }
+
+.badge-primary {
+  @apply border-primary-200 bg-primary-50 text-primary-900 
+         dark:border-primary-900 dark:bg-primary-900/20 dark:text-primary-300;
+}
+
+.badge-success {
+  @apply border-success/30 bg-success/10 text-success;
+}
+
+.badge-warning {
+  @apply border-warning/30 bg-warning/10 text-warning;
+}
+
+.badge-danger {
+  @apply border-danger/30 bg-danger/10 text-danger;
+}
+
+/* Tipografia */
+h1, .h1 {
+  @apply text-5xl font-bold font-display leading-tight;
+}
+
+h2, .h2 {
+  @apply text-4xl font-semibold font-display;
+}
+
+h3, .h3 {
+  @apply text-2xl font-semibold font-display;
+}
+
+h4, .h4 {
+  @apply text-lg font-semibold;
+}
+
+h5, .h5 {
+  @apply text-base font-semibold;
+}
+
+h6, .h6 {
+  @apply text-sm font-semibold;
+}
+
+p {
+  @apply text-base leading-relaxed;
+}
+
+small {
+  @apply text-sm text-zinc-600 dark:text-zinc-400;
+}
+
+/* Utility Classes */
 .btn-new-count {
-  @apply bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100;
+  @apply bg-primary-500 text-white hover:bg-primary-600;
+}
+
+.text-muted {
+  @apply text-zinc-500 dark:text-zinc-400;
+}
+
+.text-subtle {
+  @apply text-zinc-600 dark:text-zinc-300;
+}
+
+.divider {
+  @apply border-t border-zinc-200 dark:border-zinc-800;
+}
+
+.container-safe {
+  @apply max-w-3xl mx-auto px-4 sm:px-6 md:px-8;
+}
+
+/* Accessibility */
+.sr-only {
+  @apply absolute w-1 h-1 p-0 m-[-1px] overflow-hidden border-0 whitespace-nowrap;
+}
+
+/* Focus visible para accessibility */
+*:focus-visible {
+  @apply outline-primary-500 outline-offset-2;
+}
+
+/* ===== ANIMATIONS ===== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* ===== UTILITY CLASSES ===== */
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInFromLeft 0.3s ease-in-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInFromRight 0.3s ease-in-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-in-out;
+}
+
+/* Skeleton Loader */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    #3f3f46 25%,
+    #52525b 50%,
+    #3f3f46 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Button & Card Interactions (already defined above, ensuring smooth transitions) */
+.btn {
+  transition: all 0.2s ease-in-out;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Link Interactions */
+.link {
+  transition: all 0.2s ease-in-out;
+}
+
+.link:hover {
+  text-decoration-thickness: 2px;
+}
+/* Mobile-first Responsive Sizing */
+@layer components {
+  /* Touch-friendly input (44px in mobile per Apple HIG) */
+  .input {
+    @apply min-h-10 text-base sm:text-sm sm:min-h-9 font-sans;
+  }
+
+  /* Touch-friendly button (44px in mobile) */
+  .btn {
+    @apply min-h-10 sm:min-h-9 font-sans;
+  }
+
+  /* Prevent iOS zoom on input focus */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  @media (min-width: 640px) {
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    textarea,
+    select {
+      font-size: 14px;
+    }
+  }
 }

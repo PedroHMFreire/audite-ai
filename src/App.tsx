@@ -51,7 +51,7 @@ export default function App() {
         {/* Only show Header for app routes, not landing page */}
         {!isPublicRoute && <Header />}
         
-        <main className={isPublicRoute ? '' : 'max-w-3xl mx-auto px-4 sm:px-6 md:px-8 py-6'}>
+        <main className={isPublicRoute ? '' : 'max-w-3xl mx-auto px-4 sm:px-6 md:px-8 py-6'} style={!isPublicRoute ? { paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' } : {}}>
           <Routes>
             {/* Public Routes - Landing Page System */}
             <Route path="/" element={<LandingPage />} />

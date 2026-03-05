@@ -43,10 +43,11 @@ export type ScheduleItem = {
   scheduled_date: string // YYYY-MM-DD
   week_number: number
   day_of_week: number // 1=seg, 7=dom
-  status: 'pending' | 'completed' | 'skipped' | 'rescheduled'
+  status: 'pending' | 'completed' | 'skipped' | 'rescheduled' | 'archived'
   count_id?: string
   notes?: string
   completed_at?: string
+  archived_at?: string // timestamp quando foi soft-deleted
   created_at: string
   updated_at: string
 }
@@ -91,7 +92,10 @@ export type CategoryStats = {
 export async function getCurrentUserId(): Promise<string> {
   const { data } = await supabase.auth.getSession()
   
-  if (!navigator.onLine) throw new Error('Sem internet. Conecte-se e tente novamente.')
+  // Verifica conectividade de forma segura (navigator só existe em browser)
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new Error('Sem internet. Conecte-se e tente novamente.')
+  }
   if (!data.session?.user) throw new Error('Não autenticado. Faça login para continuar.')
   
   const userId = data.session.user.id
@@ -130,7 +134,7 @@ export async function createCount(nome: string, storeName: string | null) {
   }
   const { data, error } = await supabase
     .from('counts')
-    .insert({ user_id, store_id, nome: sanitizedNome })
+    .insert({ user_id, store_id, nome: sanitizedNome, status: 'em_andamento' })
     .select('*')
     .single()
   if (error) throw error
@@ -143,21 +147,34 @@ export async function savePlanItems(count_id: string, items: { codigo: string; n
     SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID', { count_id })
     throw new Error('ID da contagem inválido')
   }
-  if (!items || items.length === 0) {
+  
+  if (!items || !InputValidator.nonEmptyArray(items)) {
     throw new Error('Lista de itens não pode estar vazia')
   }
   
+  if (items.length > 10000) {
+    throw new Error('Limite de 10000 itens por contagem excedido')
+  }
+  
   // Validação e sanitização de cada item
-  const rows = items.map(r => {
+  const rows = items.map((r, idx) => {
     const sanitizedCodigo = InputValidator.sanitizeText(r.codigo.trim())
     const sanitizedNome = InputValidator.sanitizeText(r.nome.trim())
     
+    if (!sanitizedCodigo || sanitizedCodigo.length === 0) {
+      throw new Error(`Item ${idx + 1}: Código não pode estar vazio`)
+    }
+    
     if (!InputValidator.productCode(sanitizedCodigo)) {
-      throw new Error(`Código de produto inválido: ${sanitizedCodigo}`)
+      throw new Error(`Item ${idx + 1}: Código de produto inválido`)
+    }
+    
+    if (!sanitizedNome || sanitizedNome.length === 0) {
+      throw new Error(`Item ${idx + 1}: Nome do produto não pode estar vazio`)
     }
     
     if (!InputValidator.quantity(r.saldo)) {
-      throw new Error(`Quantidade inválida: ${r.saldo}`)
+      throw new Error(`Item ${idx + 1}: Quantidade inválida (deve ser 0-999999)`)
     }
     
     return { 
@@ -173,13 +190,30 @@ export async function savePlanItems(count_id: string, items: { codigo: string; n
 }
 
 export async function addManualEntry(count_id: string, codigo: string, qty: number = 1) {
-  if (!codigo.trim()) {
-    throw new Error('Código não pode estar vazio')
+  // Validação de count_id
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID', { count_id })
+    throw new Error('ID da contagem inválido')
+  }
+  
+  // Validação de código
+  if (!InputValidator.nonEmptyString(codigo)) {
+    throw new Error('Código do produto não pode estar vazio')
+  }
+  
+  const sanitizedCodigo = InputValidator.sanitizeText(codigo.trim())
+  if (!InputValidator.productCode(sanitizedCodigo)) {
+    throw new Error(`Código de produto inválido: deve conter apenas letras, números, hífens e underscores`)
+  }
+  
+  // Validação de quantidade
+  if (!InputValidator.positiveInteger(qty) || !InputValidator.quantity(qty)) {
+    throw new Error(`Quantidade inválida: deve ser um número inteiro positivo (máx 999999)`)
   }
   
   const { error } = await supabase.from('manual_entries').insert({ 
     count_id, 
-    codigo: codigo.trim(), 
+    codigo: sanitizedCodigo, 
     qty: Math.max(1, qty) 
   })
   if (error) throw error
@@ -205,9 +239,29 @@ export async function deleteManualEntry(id: string) {
   if (error) throw error
 }
 
+/**
+ * Busca contagens paginadas com filtro opcional
+ * ⚡ PERFORMANCE: Usa índice (user_id, created_at DESC) + range para paginação
+ * ⚠ NOTA: Search com ilike sem índice full-text pode ser custoso em muitos registros
+ *    Para otimizar em produção, considerar full-text search
+ * @param limit Itens por página (default: 10)
+ * @param from Offset inicial (default: 0)
+ * @param search Filtro opcional por nome
+ * @returns Contagens ordenadas por data mais recente
+ */
 export async function getCounts(limit = 10, from = 0, search = '') {
-  let q = supabase.from('counts').select('*').order('created_at', { ascending: false }).range(from, from + limit - 1)
-  if (search) q = q.like('nome', `%${search}%`)
+  const user_id = await getCurrentUserId()
+  
+  let q = supabase
+    .from('counts')
+    .select('*')
+    .eq('user_id', user_id)
+    // Índice: idx_counts_user_created (user_id, created_at DESC)
+    .order('created_at', { ascending: false })
+    .range(from, from + limit - 1)
+  
+  if (search) q = q.ilike('nome', `%${search}%`)
+  
   const { data, error } = await q
   if (error) throw error
   return data as Count[]
@@ -219,6 +273,12 @@ export async function getCountById(id: string) {
   return data as Count
 }
 
+export async function getStoreById(id: string) {
+  const { data, error } = await supabase.from('stores').select('name').eq('id', id).single()
+  if (error) throw error
+  return data?.name || null
+}
+
 export async function getPlanItems(count_id: string) {
   const { data, error } = await supabase.from('plan_items').select('codigo,nome,saldo').eq('count_id', count_id)
   if (error) throw error
@@ -226,15 +286,50 @@ export async function getPlanItems(count_id: string) {
 }
 
 export async function computeAndSaveResults(count_id: string) {
-  const { data: plan, error: pErr } = await supabase.from('plan_items').select('codigo,nome,saldo').eq('count_id', count_id)
-  if (pErr) throw pErr
+  // Validação de UUID
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_COMPUTE', { count_id })
+    throw new Error('ID da contagem inválido')
+  }
 
-  const { data: entries, error: mErr } = await supabase.from('manual_entries').select('codigo,qty').eq('count_id', count_id)
-  if (mErr) throw mErr
+  // Validar que o count_id pertence ao usuário atual (RLS)
+  const user_id = await getCurrentUserId()
+  const { data: countData, error: countCheckErr } = await supabase
+    .from('counts')
+    .select('id')
+    .eq('id', count_id)
+    .eq('user_id', user_id)
+    .single()
+  
+  if (countCheckErr || !countData) {
+    SecurityLogger.logSuspiciousActivity('UNAUTHORIZED_COUNT_ACCESS', { count_id, user_id })
+    throw new Error('Você não tem permissão para finalizar esta contagem')
+  }
 
+  // Buscar planilha
+  const { data: plan, error: pErr } = await supabase
+    .from('plan_items')
+    .select('codigo,nome,saldo')
+    .eq('count_id', count_id)
+  if (pErr) {
+    console.error('Erro ao buscar planilha:', pErr)
+    throw new Error('Erro ao buscar planilha: ' + pErr.message)
+  }
+
+  // Buscar entradas manuais
+  const { data: entries, error: mErr } = await supabase
+    .from('manual_entries')
+    .select('codigo,qty')
+    .eq('count_id', count_id)
+  if (mErr) {
+    console.error('Erro ao buscar entradas:', mErr)
+    throw new Error('Erro ao buscar entradas: ' + mErr.message)
+  }
+
+  // Agregação de quantidades por código (soma múltiplas entradas do mesmo código)
   const manualMap = new Map<string, number>()
   for (const e of entries || []) {
-    const qty = e.qty ?? 1
+    const qty = Math.max(0, Number(e.qty) || 0) // Valida e converte
     manualMap.set(e.codigo, (manualMap.get(e.codigo) || 0) + qty)
   }
 
@@ -245,31 +340,75 @@ export async function computeAndSaveResults(count_id: string) {
 
   const results: any[] = []
 
-  // 1) Regulares e Falta
+  // 1) Processar todos os itens do plano (nenhum ignorado)
+  // Lógica: REGULAR (diferença=0), FALTA (encontrou menos), EXCESSO (encontrou mais)
   for (const [codigo, { nome, saldo }] of planMap.entries()) {
-    const m = manualMap.get(codigo) || 0
-    if (m === saldo) {
-      results.push({ count_id, codigo, status: 'regular', manual_qtd: m, saldo_qtd: saldo, nome_produto: nome })
-    } else if (m === 0) {
-      results.push({ count_id, codigo, status: 'falta', manual_qtd: 0, saldo_qtd: saldo, nome_produto: nome })
+    const manualQty = manualMap.get(codigo) || 0
+    const diferenca = saldo - manualQty // diferença: esperado - encontrado
+    
+    let status: 'regular' | 'falta' | 'excesso'
+    
+    if (diferenca === 0) {
+      status = 'regular'
+    } else if (diferenca > 0) {
+      status = 'falta' // Encontrou menos = falta
     } else {
-      // divergências parciais não entram por especificação
+      status = 'excesso' // Encontrou mais = excesso
     }
+    
+    results.push({
+      count_id,
+      codigo,
+      status,
+      manual_qtd: manualQty,
+      saldo_qtd: saldo,
+      nome_produto: nome
+      // NÃO incluir 'diferenca' - coluna não existe na tabela
+    })
   }
 
-  // 2) Excesso (códigos inseridos que não existem no plano)
+  // 2) Itens com excesso de código (produtos não no plano)
   for (const [codigo, qty] of manualMap.entries()) {
     if (!planMap.has(codigo)) {
-      results.push({ count_id, codigo, status: 'excesso', manual_qtd: qty, saldo_qtd: 0, nome_produto: '' })
+      results.push({
+        count_id,
+        codigo,
+        status: 'excesso',
+        manual_qtd: qty,
+        saldo_qtd: 0,
+        nome_produto: ''
+        // NÃO incluir 'diferenca' - coluna não existe na tabela
+      })
     }
   }
 
-  // Clean previous and insert new
-  await supabase.from('results').delete().eq('count_id', count_id)
+  // Limpar resultados anteriores e inserir novos
+  const { error: delErr } = await supabase.from('results').delete().eq('count_id', count_id)
+  if (delErr) {
+    console.error('Erro ao deletar resultados antigos:', delErr)
+    throw new Error('Erro ao limpar resultados anteriores: ' + delErr.message)
+  }
   
+  // Inserir novos resultados se houver
   if (results.length > 0) {
     const { error: rErr } = await supabase.from('results').insert(results)
-    if (rErr) throw rErr
+    if (rErr) {
+      console.error('Erro ao inserir resultados:', rErr)
+      throw new Error('Erro ao salvar resultados: ' + rErr.message)
+    }
+  }
+  
+  console.log(`✓ Contagem finalizada com sucesso: ${results.length} resultados`)
+  
+  // Marcar contagem como finalizada
+  const { error: updateErr } = await supabase
+    .from('counts')
+    .update({ status: 'finalizada' })
+    .eq('id', count_id)
+  
+  if (updateErr) {
+    console.error('Erro ao marcar contagem como finalizada:', updateErr)
+    throw new Error('Erro ao atualizar status de finalização: ' + updateErr.message)
   }
   
   return results
@@ -281,6 +420,59 @@ export async function getResultsByCount(count_id: string) {
   return data as Result[]
 }
 
+export async function reopenCount(count_id: string) {
+  // Validação de UUID
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID', { count_id })
+    throw new Error('ID da contagem inválido')
+  }
+  
+  // Verificar que a contagem pertence ao usuário autenticado
+  const user_id = await getCurrentUserId()
+  const { data: count, error: checkErr } = await supabase
+    .from('counts')
+    .select('id, user_id, status')
+    .eq('id', count_id)
+    .single()
+  
+  if (checkErr || !count) {
+    SecurityLogger.logSuspiciousActivity('COUNT_NOT_FOUND', { count_id })
+    throw new Error('Contagem não encontrada')
+  }
+  
+  if (count.user_id !== user_id) {
+    SecurityLogger.logSuspiciousActivity('UNAUTHORIZED_REOPEN', { count_id, user_id })
+    throw new Error('Sem permissão para reabrir esta contagem')
+  }
+  
+  // Limpar resultados anteriores
+  const { error: delErr } = await supabase
+    .from('results')
+    .delete()
+    .eq('count_id', count_id)
+  
+  if (delErr) {
+    console.error('Erro ao deletar resultados antigos:', delErr)
+    throw new Error('Erro ao limpar resultados anteriores: ' + delErr.message)
+  }
+  
+  // Marcar contagem como reavertida
+  const { data: updated, error: updateErr } = await supabase
+    .from('counts')
+    .update({ status: 'reavertida' })
+    .eq('id', count_id)
+    .select('*')
+    .single()
+  
+  if (updateErr) {
+    console.error('Erro ao reabrir contagem:', updateErr)
+    throw new Error('Erro ao reabrir contagem: ' + updateErr.message)
+  }
+  
+  console.log(`✓ Contagem reavertida com sucesso: ${count_id}`)
+  return updated as Count
+}
+
 export async function getTotalsLastCounts(limit = 5) {
   const { data: counts, error } = await supabase.from('counts').select('id,nome,created_at').order('created_at', { ascending: false }).limit(limit)
   if (error) throw error
@@ -288,15 +480,36 @@ export async function getTotalsLastCounts(limit = 5) {
   const out: { name: string; Regular: number; Excesso: number; Falta: number }[] = []
   
   for (const c of counts || []) {
-    const { data: rows, error: rErr } = await supabase.from('results').select('status').eq('count_id', c.id)
+    const { data: rows, error: rErr } = await supabase
+      .from('results')
+      .select('status, manual_qtd, saldo_qtd')
+      .eq('count_id', c.id)
+    
     if (rErr) throw rErr
     
-    const totals = { Regular: 0, Excesso: 0, Falta: 0 }
+    // Contagem por UNIDADES (não por itens)
+    const totals = { 
+      Regular: 0,   // Unidades em quantidade correta
+      Excesso: 0,   // Unidades excedentes
+      Falta: 0      // Unidades em falta
+    }
+    
     for (const r of rows || []) {
       const status = r.status as string
-      if (status === 'regular') totals.Regular++
-      else if (status === 'excesso') totals.Excesso++
-      else if (status === 'falta') totals.Falta++
+      const manualQty = Number(r.manual_qtd) || 0
+      const expectedQty = Number(r.saldo_qtd) || 0
+      const diferenca = Math.abs(expectedQty - manualQty) // Calcular diferença aqui
+      
+      if (status === 'regular') {
+        // Regular = quantidade exata encontrada
+        totals.Regular += expectedQty
+      } else if (status === 'excesso') {
+        // Excesso = quantidade acima do esperado
+        totals.Excesso += diferenca
+      } else if (status === 'falta') {
+        // Falta = quantidade abaixo do esperado
+        totals.Falta += diferenca
+      }
     }
     out.push({ name: c.nome, ...totals })
   }
@@ -307,13 +520,24 @@ export async function getTotalsLastCounts(limit = 5) {
 // FUNÇÕES PARA CATEGORIAS
 // ===============================================
 
+/**
+ * Busca categorias ativas do usuário
+ * ⚡ RECOMENDAÇÃO: Use em componentes com useSessionCache() ou useCache()
+ *    pois dados raramente mudam durante a navegação
+ *    Exemplo: const { data: categories } = useSessionCache('getCategories', getCategories, 10 * 60 * 1000)
+ * @returns Categories ordenadas por prioridade
+ */
 export async function getCategories(): Promise<Category[]> {
+  const user_id = await getCurrentUserId()
+  
   const { data, error } = await supabase
     .from('categories')
     .select('*')
+    .eq('user_id', user_id)
     .eq('is_active', true)
     .order('priority', { ascending: false })
     .order('name')
+    // Índice: idx_categories_user_active (user_id, is_active, priority DESC)
   
   if (error) throw error
   return data as Category[]
@@ -333,13 +557,29 @@ export async function getCategoryById(id: string): Promise<Category> {
 export async function createCategory(category: Omit<Category, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Category> {
   const user_id = await getCurrentUserId()
   
+  // Validação de nome
+  if (!InputValidator.nonEmptyString(category.name)) {
+    throw new Error('Nome da categoria não pode estar vazio')
+  }
+  
+  // Validação de priority (1-5)
+  const priority = category.priority || 1
+  if (!InputValidator.positiveInteger(priority) || priority < 1 || priority > 5) {
+    throw new Error('Prioridade deve ser um número entre 1 e 5')
+  }
+  
+  // Validação de descrição
+  if (category.description && !InputValidator.nonEmptyString(category.description)) {
+    throw new Error('Descrição deve estar vazia ou conter texto válido')
+  }
+  
   const { data, error } = await supabase
     .from('categories')
     .insert({
       user_id,
       name: category.name.trim(),
       description: category.description?.trim() || null,
-      priority: Math.min(5, Math.max(1, category.priority)),
+      priority: Math.min(5, Math.max(1, priority)),
       color: category.color || '#6B7280',
       is_active: category.is_active ?? true
     })
@@ -387,20 +627,34 @@ export async function getCategoryStats(): Promise<CategoryStats[]> {
 // FUNÇÕES PARA CONFIGURAÇÕES DE CRONOGRAMA
 // ===============================================
 
+/**
+ * Busca configurações de cronograma ativas
+ * ⚡ RECOMENDAÇÃO: Use em componentes com useSessionCache() para evitar re-fetches
+ *    os dados mudam apenas quando usuário cria nova configuração
+ * @returns Schedule configs mais recentes primeiro
+ */
 export async function getScheduleConfigs(): Promise<ScheduleConfig[]> {
+  const user_id = await getCurrentUserId()
+  
   const { data, error } = await supabase
     .from('schedule_configs')
     .select('*')
+    .eq('user_id', user_id)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
+    // Índice: idx_schedule_configs_user_active (user_id, is_active)
   
   if (error) throw error
   return data as ScheduleConfig[]
 }
 
 export async function getActiveScheduleConfig(): Promise<ScheduleConfig | null> {
+  const user_id = await getCurrentUserId()
+  
   const { data, error } = await supabase
     .from('schedule_configs')
     .select('*')
+    .eq('user_id', user_id)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -412,6 +666,41 @@ export async function getActiveScheduleConfig(): Promise<ScheduleConfig | null> 
 
 export async function createScheduleConfig(config: Omit<ScheduleConfig, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'generated_at'>): Promise<ScheduleConfig> {
   const user_id = await getCurrentUserId()
+  
+  // Validação de nome
+  if (!InputValidator.nonEmptyString(config.name)) {
+    throw new Error('Nome da configuração não pode estar vazio')
+  }
+  
+  // Validação de sectors_per_week (1-10)
+  if (!InputValidator.positiveInteger(config.sectors_per_week) || config.sectors_per_week < 1 || config.sectors_per_week > 10) {
+    throw new Error('Setores por semana deve ser um número entre 1 e 10')
+  }
+  
+  // Validação de start_date
+  if (!InputValidator.validDate(config.start_date)) {
+    throw new Error('Data de início inválida')
+  }
+  
+  // Validação de end_date se fornecida
+  if (config.end_date && !InputValidator.validDate(config.end_date)) {
+    throw new Error('Data de fim inválida')
+  }
+  
+  // Validação de total_weeks (1-52)
+  if (!InputValidator.positiveInteger(config.total_weeks) || config.total_weeks < 1 || config.total_weeks > 52) {
+    throw new Error('Total de semanas deve ser um número entre 1 e 52')
+  }
+  
+  // Validação de work_days
+  if (!InputValidator.nonEmptyArray(config.work_days || [])) {
+    throw new Error('Deve haver pelo menos um dia útil selecionado')
+  }
+  
+  const workDays = config.work_days || [1, 2, 3, 4, 5]
+  if (!workDays.every(d => d >= 1 && d <= 7)) {
+    throw new Error('Dias úteis devem ser números entre 1 (seg) e 7 (dom)')
+  }
   
   // Desativa configurações anteriores
   await supabase
@@ -430,7 +719,7 @@ export async function createScheduleConfig(config: Omit<ScheduleConfig, 'id' | '
       start_date: config.start_date,
       end_date: config.end_date || null,
       total_weeks: Math.min(52, Math.max(1, config.total_weeks)),
-      work_days: config.work_days || [1, 2, 3, 4, 5],
+      work_days: workDays,
       is_active: true
     })
     .select('*')
@@ -465,10 +754,17 @@ export async function deleteScheduleConfig(id: string): Promise<void> {
 // ===============================================
 
 export async function getScheduleItems(configId: string, weekNumber?: number): Promise<ScheduleItem[]> {
+  // Validação de UUID para configId
+  if (!InputValidator.uuid(configId)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_CONFIG_ID', { configId })
+    throw new Error('ID de configuração inválido')
+  }
+  
   let query = supabase
     .from('schedule_items')
     .select('*')
     .eq('config_id', configId)
+    .is('archived_at', null) // Filtra itens não arquivados
   
   if (weekNumber !== undefined) {
     query = query.eq('week_number', weekNumber)
@@ -490,15 +786,44 @@ export async function getAllScheduleItems(): Promise<ScheduleItem[]> {
   return data as ScheduleItem[]
 }
 
+/**
+ * Busca itens de cronograma com detalhes de categoria e contagem
+ * ⚡ PERFORMANCE: Usa índice composto (config_id, archived_at) + select específico
+ * ⚡ RECOMENDAÇÃO: Para componentes que exibem muitos items, paginar com limit()/offset()
+ *    ou considerar criar VIEW com pré-join das categorias/counts
+ * @param configId UUID da configuração
+ * @param weekNumber Filtro opcional por semana
+ * @returns Items com categoria e count denormalizados
+ */
 export async function getScheduleItemsWithDetails(configId: string, weekNumber?: number) {
+  // Validação de UUID para configId
+  if (!InputValidator.uuid(configId)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_CONFIG_ID', { configId })
+    throw new Error('ID de configuração inválido')
+  }
+  
   let query = supabase
     .from('schedule_items')
     .select(`
-      *,
-      category:categories(name, color, priority),
-      count:counts(nome, status)
+      id,
+      config_id,
+      category_id,
+      scheduled_date,
+      week_number,
+      day_of_week,
+      status,
+      count_id,
+      notes,
+      completed_at,
+      archived_at,
+      created_at,
+      updated_at,
+      categories!inner(id, name, color, priority),
+      counts(id, nome, status)
     `)
+    .is('archived_at', null) // Filtra itens não arquivados
     .eq('config_id', configId)
+    // Índice: idx_schedule_items_config_archived (config_id, archived_at)
   
   if (weekNumber !== undefined) {
     query = query.eq('week_number', weekNumber)
@@ -525,6 +850,30 @@ export async function updateScheduleItemStatus(
   notes?: string,
   countId?: string
 ): Promise<void> {
+  // Validação de UUID para id
+  if (!InputValidator.uuid(id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_SCHEDULE_ITEM_ID', { id })
+    throw new Error('ID do item de cronograma inválido')
+  }
+  
+  // Validação de status válido
+  const validStatuses: ScheduleItem['status'][] = ['pending', 'completed', 'skipped', 'rescheduled', 'archived']
+  if (!validStatuses.includes(status)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_STATUS', { status })
+    throw new Error(`Status inválido: ${status}. Deve ser um de: ${validStatuses.join(', ')}`)
+  }
+  
+  // Validação de countId se fornecido
+  if (countId && !InputValidator.uuid(countId)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID', { countId })
+    throw new Error('ID da contagem inválido')
+  }
+  
+  // Validação de notes
+  if (notes && !InputValidator.nonEmptyString(notes)) {
+    throw new Error('Notas devem estar vazias ou conter texto válido')
+  }
+  
   const updates: any = { status }
   
   if (notes !== undefined) updates.notes = notes.trim() || null
@@ -551,6 +900,22 @@ export async function updateScheduleItemStatus(
 }
 
 export async function rescheduleItem(id: string, newDate: string, reason?: string): Promise<void> {
+  // Validação de UUID para id
+  if (!InputValidator.uuid(id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_SCHEDULE_ITEM_ID', { id })
+    throw new Error('ID do item de cronograma inválido')
+  }
+  
+  // Validação de data
+  if (!InputValidator.validDate(newDate)) {
+    throw new Error('Data de reagendamento inválida')
+  }
+  
+  // Validação de reason
+  if (reason && !InputValidator.nonEmptyString(reason)) {
+    throw new Error('Razão deve estar vazia ou conter texto válido')
+  }
+  
   // Busca item atual
   const { data: item, error: fetchError } = await supabase
     .from('schedule_items')
@@ -560,9 +925,11 @@ export async function rescheduleItem(id: string, newDate: string, reason?: strin
   
   if (fetchError) throw fetchError
   
-  // Calcula nova semana e dia
+  // Calcula novo dia da semana (1=seg, 2=ter, ..., 7=dom)
+  // getDay(): 0=domingo, 1=segunda, ..., 6=sábado
+  // Conversão: Se domingo (0) → 7, caso contrário mantém o valor (1-6)
   const newDateObj = new Date(newDate)
-  const newDayOfWeek = newDateObj.getDay() || 7 // 0=dom -> 7, 1=seg -> 1
+  const newDayOfWeek = newDateObj.getDay() === 0 ? 7 : newDateObj.getDay()
   
   // Atualiza item
   const { error } = await supabase
@@ -606,11 +973,15 @@ interface GenerateScheduleOptions {
 export async function generateSchedule(options: GenerateScheduleOptions): Promise<ScheduleItem[]> {
   const { configId, categories, sectorsPerWeek, startDate, totalWeeks, workDays } = options
   
-  // Remove itens existentes do cronograma
+  // Soft delete itens existentes do cronograma - marca como 'archived' em vez de deletar
   await supabase
     .from('schedule_items')
-    .delete()
+    .update({
+      status: 'archived',
+      archived_at: new Date().toISOString()
+    })
     .eq('config_id', configId)
+    .is('archived_at', null) // Só arquiva os que não foram já arquivados
   
   const schedule: Omit<ScheduleItem, 'id' | 'created_at' | 'updated_at'>[] = []
   const activeCategories = categories.filter(c => c.is_active)
@@ -726,6 +1097,12 @@ function shuffleArray<T>(array: T[]): void {
 
 // Função wrapper para gerar cronograma a partir de uma configuração
 export async function generateScheduleFromConfig(configId: string): Promise<ScheduleItem[]> {
+  // Validação de UUID para configId
+  if (!InputValidator.uuid(configId)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_CONFIG_ID', { configId })
+    throw new Error('ID de configuração inválido')
+  }
+  
   // Busca configuração
   const { data: config, error: configError } = await supabase
     .from('schedule_configs')
@@ -761,25 +1138,52 @@ export async function generateScheduleFromConfig(configId: string): Promise<Sche
 // ===============================================
 
 export async function deleteScheduleItem(id: string): Promise<void> {
+  // Validação de UUID para id
+  if (!InputValidator.uuid(id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_SCHEDULE_ITEM_ID', { id })
+    throw new Error('ID do item de cronograma inválido')
+  }
+  
+  // Soft delete - marca como archived em vez de deletar
   const { error } = await supabase
     .from('schedule_items')
-    .delete()
+    .update({
+      status: 'archived',
+      archived_at: new Date().toISOString()
+    })
     .eq('id', id)
   
   if (error) throw error
 }
 
 export async function deleteAllScheduleItems(configId: string): Promise<void> {
+  // Validação de UUID para configId
+  if (!InputValidator.uuid(configId)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_CONFIG_ID', { configId })
+    throw new Error('ID de configuração inválido')
+  }
+  
+  // Soft delete - marca como archived em vez de deletar
   const { error } = await supabase
     .from('schedule_items')
-    .delete()
+    .update({
+      status: 'archived',
+      archived_at: new Date().toISOString()
+    })
     .eq('config_id', configId)
+    .is('archived_at', null) // Só arquiva os que não foram já arquivados
   
   if (error) throw error
 }
 
 export async function deleteScheduleConfigCompletely(id: string): Promise<void> {
-  // Primeiro deleta todos os itens do cronograma
+  // Validação de UUID para id
+  if (!InputValidator.uuid(id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_CONFIG_ID', { id })
+    throw new Error('ID de configuração inválido')
+  }
+  
+  // Primeiro faz soft delete de todos os itens do cronograma
   await deleteAllScheduleItems(id)
   
   // Depois deleta a configuração
