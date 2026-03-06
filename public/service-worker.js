@@ -199,4 +199,88 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+// =============================================
+// NOTIFICATION HANDLERS
+// =============================================
+
+// Handle notification click
+self.addEventListener('notificationclick', (event) => {
+  console.log('[ServiceWorker] Notification clicked:', event.notification.tag);
+  
+  event.notification.close();
+  
+  const data = event.notification.data;
+  let urlToOpen = '/';
+  
+  // Navegar baseado na ação e dados
+  if (event.action === 'open-audit' && data.scheduleItemId) {
+    urlToOpen = `/counts?audit=${data.scheduleItemId}`;
+  } else if (data.scheduleItemId) {
+    urlToOpen = `/counts?audit=${data.scheduleItemId}`;
+  }
+  
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    }).then((clientList) => {
+      // Procurar por aba já aberta
+      for (let i = 0; i < clientList.length; i++) {
+        const client = clientList[i];
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      
+      // Abrir nova aba se não encontrar
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+
+// Handle notification close (para analytics)
+self.addEventListener('notificationclose', (event) => {
+  console.log('[ServiceWorker] Notification closed:', event.notification.tag);
+  
+  const data = event.notification.data;
+  
+  // Enviar analytics de fechamento
+  if (data.scheduleItemId && clients) {
+    clients.matchAll().then((clientList) => {
+      clientList.forEach((client) => {
+        client.postMessage({
+          type: 'NOTIFICATION_CLOSED',
+          scheduleItemId: data.scheduleItemId
+        });
+      });
+    });
+  }
+});
+
+// Handle push notifications (para future use)
+self.addEventListener('push', (event) => {
+  console.log('[ServiceWorker] Push notification received');
+  
+  if (event.data) {
+    const notificationData = event.data.json();
+    
+    const options = {
+      body: notificationData.body || notificationData.message,
+      icon: '/icon-192.png',
+      badge: '/icon-96.png',
+      tag: notificationData.tag || 'audite-notification',
+      data: notificationData.data
+    };
+    
+    event.waitUntil(
+      self.registration.showNotification(
+        notificationData.title || 'AUDITE.AI',
+        options
+      )
+    );
+  }
+});
+
 console.log('[ServiceWorker] Loaded');
