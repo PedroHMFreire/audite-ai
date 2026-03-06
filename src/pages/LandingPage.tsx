@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Check, Star, Users, BarChart3, Calendar, Shield, Zap, Heart } from 'lucide-react'
+import { Check, Star, Users, BarChart3, Calendar, Shield, Zap, Heart, Menu, X } from 'lucide-react'
+import Logo from '../components/Logo'
 
 const plans = [
   {
@@ -110,6 +111,7 @@ const features = [
 
 export default function LandingPage() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const navigate = useNavigate()
 
   const handleStartTrial = (planName: string) => {
@@ -124,12 +126,11 @@ export default function LandingPage() {
       <header className="bg-white shadow-sm border-b border-zinc-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">A</span>
-              </div>
-              <span className="text-xl font-bold text-zinc-900">AUDITE.AI</span>
-            </div>
+            <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <Logo size={32} />
+            </Link>
+            
+            {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-8">
               <a href="#recursos" className="text-zinc-600 hover:text-zinc-900 transition-colors">Recursos</a>
               <a href="#precos" className="text-zinc-600 hover:text-zinc-900 transition-colors">Preços</a>
@@ -141,15 +142,61 @@ export default function LandingPage() {
                 Entrar
               </Link>
             </nav>
+
+            {/* Mobile Menu Button */}
+            <button 
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 hover:bg-zinc-100 rounded-lg transition-colors"
+            >
+              {mobileMenuOpen ? (
+                <X className="w-6 h-6 text-zinc-900" />
+              ) : (
+                <Menu className="w-6 h-6 text-zinc-900" />
+              )}
+            </button>
           </div>
+
+          {/* Mobile Navigation */}
+          {mobileMenuOpen && (
+            <nav className="md:hidden border-t border-zinc-200 py-4 space-y-3">
+              <a 
+                href="#recursos" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-zinc-600 hover:text-zinc-900 transition-colors py-2"
+              >
+                Recursos
+              </a>
+              <a 
+                href="#precos"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-zinc-600 hover:text-zinc-900 transition-colors py-2"
+              >
+                Preços
+              </a>
+              <a 
+                href="#depoimentos"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-zinc-600 hover:text-zinc-900 transition-colors py-2"
+              >
+                Depoimentos
+              </a>
+              <Link 
+                to="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-zinc-800 transition-colors text-center"
+              >
+                Entrar
+              </Link>
+            </nav>
+          )}
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="py-20 bg-gradient-to-br from-zinc-50 to-zinc-100">
+      <section className="py-12 md:py-20 bg-gradient-to-br from-zinc-50 to-zinc-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-zinc-900 mb-6">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-zinc-900 mb-6">
               Controle de Estoque
               <span className="text-orange-500 block">Inteligente e Automático</span>
             </h1>
@@ -161,19 +208,19 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <button 
                 onClick={() => handleStartTrial('Profissional')}
-                className="bg-orange-500 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-orange-600 transition-colors shadow-lg"
+                className="w-full sm:w-auto bg-orange-500 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-orange-600 transition-colors shadow-lg"
               >
                 🚀 Teste Grátis por 7 Dias
               </button>
               <a 
                 href="#recursos" 
-                className="border-2 border-zinc-300 text-zinc-700 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-zinc-50 transition-colors"
+                className="w-full sm:w-auto border-2 border-zinc-300 text-zinc-700 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-zinc-50 transition-colors text-center"
               >
                 Ver Como Funciona
               </a>
             </div>
 
-            <div className="flex items-center justify-center gap-6 text-sm text-zinc-500">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 text-sm text-zinc-500">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-orange-500" />
                 <span>Sem cartão de crédito</span>
@@ -196,11 +243,11 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <p className="text-zinc-500 mb-8">Confiado por mais de 500+ lojistas</p>
-            <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-2 mb-4">
               {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-6 h-6 text-orange-400 fill-current" />
+                <Star key={i} className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 fill-current" />
               ))}
-              <span className="ml-2 text-zinc-600 font-semibold">4.9/5</span>
+              <span className="ml-0 sm:ml-2 text-zinc-600 font-semibold">4.9/5</span>
             </div>
             <p className="text-zinc-500">Baseado em 200+ avaliações</p>
           </div>
@@ -208,7 +255,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="recursos" className="py-20 bg-zinc-50">
+      <section id="recursos" className="py-12 md:py-20 bg-zinc-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 mb-4">
@@ -219,9 +266,9 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
             {features.map((feature, index) => (
-              <div key={index} className="bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow border border-zinc-100">
+              <div key={index} className="bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow border border-zinc-100">
                 <div className="mb-4">{feature.icon}</div>
                 <h3 className="text-xl font-semibold text-zinc-900 mb-3">{feature.title}</h3>
                 <p className="text-zinc-600">{feature.description}</p>
@@ -232,7 +279,7 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section */}
-      <section id="precos" className="py-20 bg-white">
+      <section id="precos" className="py-12 md:py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 mb-4">
@@ -243,12 +290,12 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-4 md:gap-8 max-w-6xl mx-auto">
             {plans.map((plan, index) => (
               <div 
                 key={index} 
-                className={`relative bg-white rounded-2xl shadow-lg border-2 p-8 ${
-                  plan.highlighted ? 'border-orange-500 scale-105' : 'border-zinc-200'
+                className={`relative bg-white rounded-2xl shadow-lg border-2 p-4 sm:p-6 md:p-8 ${
+                  plan.highlighted ? 'border-orange-500 md:scale-105' : 'border-zinc-200'
                 }`}
               >
                 {plan.badge && (
@@ -279,7 +326,7 @@ export default function LandingPage() {
 
                 <button
                   onClick={() => handleStartTrial(plan.name)}
-                  className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                  className={`w-full py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base ${
                     plan.highlighted
                       ? 'bg-orange-500 text-white hover:bg-orange-600'
                       : 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200'
@@ -300,7 +347,7 @@ export default function LandingPage() {
       </section>
 
       {/* Testimonials */}
-      <section id="depoimentos" className="py-20 bg-zinc-50">
+      <section id="depoimentos" className="py-12 md:py-20 bg-zinc-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 mb-4">
@@ -308,9 +355,9 @@ export default function LandingPage() {
             </h2>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-4 md:gap-8">
             {testimonials.map((testimonial, index) => (
-              <div key={index} className="bg-white p-6 rounded-xl shadow-sm border border-zinc-100">
+              <div key={index} className="bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow-sm border border-zinc-100">
                 <div className="flex items-center gap-1 mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
                     <Star key={i} className="w-4 h-4 text-orange-400 fill-current" />
@@ -330,7 +377,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-zinc-900">
+      <section className="py-12 md:py-20 bg-zinc-900">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
             Pronto para revolucionar seu estoque?
@@ -340,7 +387,7 @@ export default function LandingPage() {
           </p>
           <button
             onClick={() => handleStartTrial('Profissional')}
-            className="bg-orange-500 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-orange-600 transition-colors shadow-lg"
+            className="bg-orange-500 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-lg text-base sm:text-lg font-semibold hover:bg-orange-600 transition-colors shadow-lg"
           >
             Começar Teste Gratuito Agora
           </button>
@@ -353,43 +400,40 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-zinc-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">A</span>
-                </div>
-                <span className="text-xl font-bold">AUDITE.AI</span>
-              </div>
+              <Link to="/" className="flex items-center gap-2 mb-4 hover:opacity-80 transition-opacity w-fit">
+                <Logo size={32} />
+              </Link>
               <p className="text-zinc-400">
                 Controle de estoque inteligente para pequenas e médias empresas.
               </p>
             </div>
             
             <div>
-              <h4 className="font-semibold mb-4">Produto</h4>
-              <ul className="space-y-2 text-zinc-400">
-                <li><a href="#recursos" className="hover:text-white transition-colors">Recursos</a></li>
-                <li><a href="#precos" className="hover:text-white transition-colors">Preços</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Integrações</a></li>
+              <h4 className="font-semibold mb-4 text-sm sm:text-base">Produto</h4>
+              <ul className="space-y-1 sm:space-y-2 text-zinc-400 text-sm">
+                <li><a href="#recursos" className="block hover:text-white transition-colors py-1">Recursos</a></li>
+                <li><a href="#precos" className="block hover:text-white transition-colors py-1">Preços</a></li>
+                <li><a href="#" className="block hover:text-white transition-colors py-1">Integrações</a></li>
               </ul>
             </div>
             
             <div>
-              <h4 className="font-semibold mb-4">Suporte</h4>
-              <ul className="space-y-2 text-zinc-400">
-                <li><a href="#" className="hover:text-white transition-colors">Central de Ajuda</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contato</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Status</a></li>
+              <h4 className="font-semibold mb-4 text-sm sm:text-base">Suporte</h4>
+              <ul className="space-y-1 sm:space-y-2 text-zinc-400 text-sm">
+                <li><a href="#" className="block hover:text-white transition-colors py-1">Central de Ajuda</a></li>
+                <li><a href="#" className="block hover:text-white transition-colors py-1">Contato</a></li>
+                <li><a href="#" className="block hover:text-white transition-colors py-1">Status</a></li>
               </ul>
             </div>
             
-            <div>
-              <h4 className="font-semibold mb-4">Empresa</h4>
-              <ul className="space-y-2 text-zinc-400">
-                <li><a href="#" className="hover:text-white transition-colors">Sobre</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Carreiras</a></li>
+            <div className="hidden md:block">
+              <h4 className="font-semibold mb-4 text-sm sm:text-base">Empresa</h4>
+              <ul className="space-y-1 sm:space-y-2 text-zinc-400 text-sm">
+                <li><a href="#" className="block hover:text-white transition-colors py-1">Sobre</a></li>
+                <li><a href="#" className="block hover:text-white transition-colors py-1">Blog</a></li>
+                <li><a href="#" className="block hover:text-white transition-colors py-1">Carreiras</a></li>
               </ul>
             </div>
           </div>
