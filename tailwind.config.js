@@ -37,7 +37,7 @@ export default {
         danger: '#EF4444',
       },
       fontFamily: {
-        display: ['Playfair Display', 'Georgia', 'serif'],
+        display: ['Geist', 'system-ui', 'sans-serif'],
         sans: ['Inter', 'system-ui', 'Avenir', 'Helvetica', 'Arial', 'sans-serif'],
       },
       fontSize: {
