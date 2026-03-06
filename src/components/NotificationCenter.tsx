@@ -7,21 +7,7 @@ import {
   type NotificationPreferences
 } from '../lib/scheduleNotifications'
 import { useAuth } from '../contexts/AuthContext'
-
-interface Notification {
-  id: string
-  title: string
-  message: string
-  notification_type: string
-  created_at: string
-  read_at?: string | null
-  schedule_items?: {
-    id: string
-    categories: {
-      name: string
-    }
-  }
-}
+import { type Notification } from '../types/notifications'
 
 interface NotificationCenterProps {
   preferences: NotificationPreferences | null
@@ -43,11 +29,12 @@ export default function NotificationCenter({ preferences }: NotificationCenterPr
       const interval = setInterval(loadNotifications, 5 * 60 * 1000)
       
       // Escutar eventos de notificação em tempo real
-      window.addEventListener('notification:received', handleNewNotification)
+      const listener = (event: Event) => handleNewNotification(event as CustomEvent)
+      window.addEventListener('notification:received', listener)
       
       return () => {
         clearInterval(interval)
-        window.removeEventListener('notification:received', handleNewNotification)
+        window.removeEventListener('notification:received', listener)
       }
     }
   }, [user])

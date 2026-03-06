@@ -2,7 +2,7 @@ export function EmptyScheduleIllustration() {
   return (
     <svg viewBox="0 0 200 160" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
       {/* Calendar */}
-      <rect x="40" y="40" width="120" height="80" rx="6" fill="currentColor" opacity="0.05" stroke="currentColor" strokeWidth="2" opacity="0.2" />
+      <rect x="40" y="40" width="120" height="80" rx="6" fill="currentColor" opacity="0.1" stroke="currentColor" strokeWidth="2" />
       
       {/* Days of week headers */}
       <line x1="50" y1="60" x2="170" y2="60" stroke="currentColor" strokeWidth="1" opacity="0.15" />

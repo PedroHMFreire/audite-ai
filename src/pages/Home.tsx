@@ -46,8 +46,14 @@ export default function Home() {
   }, [])
 
   async function handleStartCount(nome: string, loja?: string | null) {
-    const c = await createCount(nome.trim(), loja)
-    nav(`/contagens/${c.id}`)
+    try {
+      const c = await createCount(nome.trim(), loja || null)
+      if (c?.id) {
+        nav(`/contagens/${c.id}`)
+      }
+    } catch (err) {
+      console.error('Error creating count:', err)
+    }
   }
 
   return (

@@ -107,7 +107,7 @@ export default function Login() {
             label="Email"
             type="email"
             value={email}
-            onChange={setEmail}
+            onChange={(value) => setEmail(value.toString())}
             placeholder="seu@email.com"
             error={error && error.includes('email') ? 'Email inválido' : undefined}
             hint="Usaremos seu email para acessar a conta"
@@ -117,7 +117,7 @@ export default function Login() {
             label="Senha"
             type="password"
             value={password}
-            onChange={setPassword}
+            onChange={(value) => setPassword(value.toString())}
             placeholder="Sua senha"
             error={error && !error.includes('email') ? error : undefined}
             hint={mode === 'signup' 

@@ -5,6 +5,14 @@
 
 import { supabase } from './supabaseClient'
 import { differenceInHours, differenceInDays, format } from 'date-fns'
+import {
+  type Notification,
+  type NotificationPreferences,
+  type ScheduleNotificationEvent,
+  type PushNotificationData,
+  type EmailNotificationData,
+  type NotificationLogEntry
+} from '../types/notifications'
 
 export interface ScheduleNotification {
   scheduleItemId: string
@@ -14,22 +22,7 @@ export interface ScheduleNotification {
   type: '7_days' | '1_day' | '1_hour' | 'now'
 }
 
-export interface NotificationPreferences {
-  id: string
-  user_id: string
-  in_app_enabled: boolean
-  push_enabled: boolean
-  email_enabled: boolean
-  notify_7_days_before: boolean
-  notify_1_day_before: boolean
-  notify_1_hour_before: boolean
-  notify_at_time: boolean
-  quiet_hours_enabled: boolean
-  quiet_hours_start?: string
-  quiet_hours_end?: string
-  timezone: string
-  notifications_enabled: boolean
-}
+export { type NotificationPreferences, type Notification } from '../types/notifications'
 
 // Tipos de mensagens
 const NOTIFICATION_MESSAGES = {
@@ -66,7 +59,7 @@ export async function checkScheduledAuditsForNotification() {
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
     // Buscar schedule_items pendentes nos próximos 7 dias
-    const { data: scheduledItems, error } = await supabase
+    const { data: scheduledItems, error } = await (supabase
       .from('schedule_items')
       .select(`
         id,
@@ -81,7 +74,7 @@ export async function checkScheduledAuditsForNotification() {
       `)
       .eq('status', 'pending')
       .gte('scheduled_date', now.toISOString().split('T')[0])
-      .lte('scheduled_date', sevenDaysFromNow.toISOString().split('T')[0])
+      .lte('scheduled_date', sevenDaysFromNow.toISOString().split('T')[0]) as any)
 
     if (error) {
       console.error('Error checking audits:', error)
@@ -90,7 +83,12 @@ export async function checkScheduledAuditsForNotification() {
 
     const notifications: ScheduleNotification[] = []
 
-    for (const item of scheduledItems || []) {
+    for (const item of (scheduledItems || []).map((i: any) => ({
+      id: i.id,
+      scheduled_date: i.scheduled_date,
+      categories: Array.isArray(i.categories) ? i.categories[0] : i.categories,
+      schedule_configs: Array.isArray(i.schedule_configs) ? i.schedule_configs[0] : i.schedule_configs
+    }))) {
       const scheduledDate = new Date(item.scheduled_date)
       const hoursUntil = differenceInHours(scheduledDate, now)
       const daysUntil = differenceInDays(scheduledDate, now)
@@ -100,36 +98,36 @@ export async function checkScheduledAuditsForNotification() {
         // Notificar 7 dias antes às 9h
         notifications.push({
           scheduleItemId: item.id,
-          categoryName: item.categories.name,
+          categoryName: item.categories?.name || 'Auditoria',
           scheduledDate,
-          userId: item.schedule_configs.user_id,
+          userId: item.schedule_configs?.user_id || '',
           type: '7_days'
         })
       } else if (daysUntil === 1 && now.getHours() === 9) {
         // Notificar 1 dia antes às 9h
         notifications.push({
           scheduleItemId: item.id,
-          categoryName: item.categories.name,
+          categoryName: item.categories?.name || 'Auditoria',
           scheduledDate,
-          userId: item.schedule_configs.user_id,
+          userId: item.schedule_configs?.user_id || '',
           type: '1_day'
         })
       } else if (hoursUntil === 1 && now.getMinutes() < 5) {
         // Notificar 1 hora antes
         notifications.push({
           scheduleItemId: item.id,
-          categoryName: item.categories.name,
+          categoryName: item.categories?.name || 'Auditoria',
           scheduledDate,
-          userId: item.schedule_configs.user_id,
+          userId: item.schedule_configs?.user_id || '',
           type: '1_hour'
         })
       } else if (hoursUntil === 0 && now.getMinutes() < 5) {
         // Notificar no momento (primeiros 5 minutos)
         notifications.push({
           scheduleItemId: item.id,
-          categoryName: item.categories.name,
+          categoryName: item.categories?.name || 'Auditoria',
           scheduledDate,
-          userId: item.schedule_configs.user_id,
+          userId: item.schedule_configs?.user_id || '',
           type: 'now'
         })
       }
@@ -150,21 +148,21 @@ export async function getUserNotificationPreferences(
 ): Promise<NotificationPreferences | null> {
   try {
     // Tenta obter preferências existentes
-    let { data: preferences, error } = await supabase
+    let { data: preferences, error } = await (supabase
       .from('notifications_preferences')
       .select('*')
       .eq('user_id', userId)
-      .single()
+      .single() as any)
 
     if (error && error.code === 'PGRST116') {
       // Não existe, criar com padrões
-      const { data: newPrefs, error: insertError } = await supabase
+      const { data: newPrefs, error: insertError } = await (supabase
         .from('notifications_preferences')
         .insert({
           user_id: userId
         })
         .select()
-        .single()
+        .single() as any)
 
       if (insertError) throw insertError
       preferences = newPrefs
@@ -172,7 +170,7 @@ export async function getUserNotificationPreferences(
       throw error
     }
 
-    return preferences
+    return preferences as NotificationPreferences | null
   } catch (error) {
     console.error('Error fetching notification preferences:', error)
     return null
@@ -333,24 +331,12 @@ async function sendPushNotification(data: {
         icon: '/icon-192.png',
         badge: '/icon-96.png',
         tag: `audit-${data.scheduleItemId}`,
-        requireInteraction: data.type === 'now' || data.type === '1_hour', // Urgentes ficam visíveis
+        requireInteraction: data.type === 'now' || data.type === '1_hour',
         data: {
           scheduleItemId: data.scheduleItemId,
           type: data.type,
           timestamp: new Date().toISOString()
-        },
-        actions: [
-          {
-            action: 'open-audit',
-            title: 'Abrir Auditoria',
-            icon: '/icon-96.png'
-          },
-          {
-            action: 'dismiss',
-            title: 'Descartar',
-            icon: '/icon-96.png'
-          }
-        ]
+        }
       })
     }
   } catch (error) {
@@ -430,9 +416,9 @@ export async function markNotificationAsRead(notificationId: string): Promise<vo
 /**
  * Obter notificações não lidas do usuário
  */
-export async function getUnreadNotifications(userId: string) {
+export async function getUnreadNotifications(userId: string): Promise<Notification[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('notifications_log')
       .select(`
         id,
@@ -448,10 +434,10 @@ export async function getUnreadNotifications(userId: string) {
       .eq('user_id', userId)
       .is('read_at', null)
       .order('created_at', { ascending: false })
-      .limit(20)
+      .limit(20) as any)
 
     if (error) throw error
-    return data || []
+    return (data || []) as Notification[]
   } catch (error) {
     console.error('Error fetching unread notifications:', error)
     return []
@@ -485,15 +471,15 @@ export async function updateNotificationPreferences(
   preferences: Partial<NotificationPreferences>
 ): Promise<NotificationPreferences | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('notifications_preferences')
       .update(preferences)
       .eq('user_id', userId)
       .select()
-      .single()
+      .single() as any)
 
     if (error) throw error
-    return data
+    return data as NotificationPreferences
   } catch (error) {
     console.error('Error updating notification preferences:', error)
     return null
