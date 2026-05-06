@@ -1,4 +1,5 @@
-import { AlertCircle, Check, Loader2 } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Eye, EyeOff } from 'lucide-react'
+import { useState } from 'react'
 
 interface FormFieldProps {
   label: string
@@ -27,12 +28,16 @@ export function FormField({
   disabled,
   autoComplete
 }: FormFieldProps) {
+  const [showPassword, setShowPassword] = useState(false)
+
   const handleChange = (newValue: string | number) => {
     onChange(newValue)
   }
 
   const hasError = !!error
   const showSuccess = success && !hasError && !validating
+  const isPasswordField = type === 'password'
+  const inputType = isPasswordField && !showPassword ? 'password' : 'text'
 
   return (
     <div className="space-y-2">
@@ -44,7 +49,7 @@ export function FormField({
       {/* Input Container */}
       <div className="relative">
         <input
-          type={type}
+          type={inputType}
           value={value}
           onChange={(e) => handleChange(e.target.value)}
           placeholder={placeholder}
@@ -57,6 +62,7 @@ export function FormField({
             focus:outline-none focus:ring-2
             transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
+            ${isPasswordField ? 'pr-12' : ''}
             ${hasError
               ? 'border-danger bg-red-50 dark:bg-red-900/10 focus:ring-red-200 dark:focus:ring-red-900/50'
               : showSuccess
@@ -68,13 +74,28 @@ export function FormField({
 
         {/* Status Icons */}
         <div className="absolute right-3 top-3 flex items-center gap-2">
-          {validating && (
+          {isPasswordField && (
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              disabled={disabled}
+              className="p-1 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors disabled:opacity-50"
+              title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+            >
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
+            </button>
+          )}
+          {!isPasswordField && validating && (
             <Loader2 className="w-5 h-5 text-zinc-400 animate-spin" />
           )}
-          {!validating && showSuccess && (
+          {!isPasswordField && !validating && showSuccess && (
             <Check className="w-5 h-5 text-success" />
           )}
-          {!validating && hasError && (
+          {!isPasswordField && !validating && hasError && (
             <AlertCircle className="w-5 h-5 text-danger" />
           )}
         </div>
