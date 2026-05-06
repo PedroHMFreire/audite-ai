@@ -13,7 +13,7 @@ export default function ManualEntry({ onAdd }: { onAdd: (codigo: string, qty?: n
     e.preventDefault()
     const c = code.trim()
     if (!c) return
-    const q = Number(qty) || 1
+    const q = Math.max(1, Number(qty) || 1)
     onAdd(c, q)
     setCode('')
     setQty('')
@@ -31,7 +31,16 @@ export default function ManualEntry({ onAdd }: { onAdd: (codigo: string, qty?: n
       />
       <input
         value={qty}
-        onChange={e => setQty(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+        onChange={e => {
+          const value = e.target.value
+          if (value === '') {
+            setQty('')
+            return
+          }
+
+          const numericValue = Number(value)
+          if (Number.isFinite(numericValue)) setQty(Math.max(1, numericValue))
+        }}
         placeholder="Qtd (opcional)"
         inputMode="numeric"
         className="input col-span-1"

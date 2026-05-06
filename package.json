@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
+    "test": "npm run test:math && npm run test:counting",
+    "test:math": "ts-node src/tests/math-validation.test.ts",
+    "test:counting": "ts-node src/tests/counting-logic-test.ts",
     "pwa:icons": "node scripts/generate-pwa-icons.js"
   },
   "dependencies": {

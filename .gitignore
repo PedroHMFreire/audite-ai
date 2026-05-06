@@ -1,1 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
 *.tsbuildinfo
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Local/editor noise
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Temporary working folders
+.tmp-openai-skills/
+.corepack/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

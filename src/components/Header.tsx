@@ -2,10 +2,10 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Settings } from 'lucide-react'
 import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
+import NotificationCenter from './NotificationCenter'
 import { supabase } from '@/lib/supabaseClient'
 import { useEffect, useState } from 'react'
 import { getUserProfile, getTrialStatusMessage, UserProfile } from '@/lib/trial'
-import { useUserPermissions, PERMISSIONS } from '@/lib/permissions'
 
 export default function Header() {
   const nav = useNavigate()
@@ -137,6 +137,7 @@ export default function Header() {
           </div>
           
           <div className="flex items-center gap-3">
+            {authed && loc.pathname !== '/login' && <NotificationCenter />}
             <ThemeToggle />
             
             {/* Mobile menu button */}
@@ -222,6 +223,18 @@ export default function Header() {
                 }`}
               >
                 ⚙️ Cronograma
+              </Link>
+              
+              <Link 
+                to="/notificacoes" 
+                onClick={handleMobileNavClick}
+                className={`block p-3 rounded-lg transition-colors ${
+                  loc.pathname === '/notificacoes'
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium' 
+                    : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                Notificacoes
               </Link>
               
               {/* Admin Dashboard Link - Mobile */}

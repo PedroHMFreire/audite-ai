@@ -17,6 +17,7 @@ import AdminDashboard from '@/pages/AdminDashboard'
 import LandingPage from '@/pages/LandingPage'
 import TrialSignup from '@/pages/TrialSignup'
 import TrialWelcome from '@/pages/TrialWelcome'
+import NotificationPreferences from '@/pages/NotificationPreferences'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -70,6 +71,8 @@ export default function App() {
             <Route path="/categorias" element={<PrivateRoute><Categories /></PrivateRoute>} />
             <Route path="/cronograma" element={<PrivateRoute><ScheduleConfig /></PrivateRoute>} />
             <Route path="/calendario" element={<PrivateRoute><ScheduleCalendar /></PrivateRoute>} />
+            <Route path="/notificacoes" element={<PrivateRoute><NotificationPreferences /></PrivateRoute>} />
+            <Route path="/notifications" element={<Navigate to="/notificacoes" replace />} />
             
             {/* Admin Routes - Protected */}
             <Route path="/admin" element={

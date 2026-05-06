@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient'
 import { InputValidator, SecurityLogger } from './security'
 
-export type Count = { id: string; user_id: string; store_id: string | null; nome: string; status: string | null; created_at: string }
+export type CountStatus = 'em_andamento' | 'finalizada' | 'reaberta' | 'reavertida' | 'arquivada'
+export type Count = { id: string; user_id: string; store_id: string | null; nome: string; status: CountStatus | string | null; created_at: string }
 export type PlanItem = { id?: string; count_id: string; codigo: string; nome: string; saldo: number }
 export type ManualEntry = { id?: string; count_id: string; codigo: string; qty?: number; created_at?: string }
 export type Result = { id?: string; count_id: string; codigo: string; status: 'regular'|'excesso'|'falta'; manual_qtd: number; saldo_qtd: number; nome_produto: string }
@@ -189,6 +190,57 @@ export async function savePlanItems(count_id: string, items: { codigo: string; n
   if (error) throw error
 }
 
+export async function replacePlanItems(count_id: string, items: { codigo: string; nome: string; saldo: number }[]) {
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID', { count_id })
+    throw new Error('ID da contagem invÃ¡lido')
+  }
+
+  const user_id = await getCurrentUserId()
+  const { data: countData, error: countError } = await supabase
+    .from('counts')
+    .select('id,status')
+    .eq('id', count_id)
+    .eq('user_id', user_id)
+    .single()
+
+  if (countError || !countData) {
+    SecurityLogger.logSuspiciousActivity('UNAUTHORIZED_COUNT_ACCESS', { count_id, user_id })
+    throw new Error('VocÃª nÃ£o tem permissÃ£o para modificar esta contagem')
+  }
+
+  if (countData.status === 'finalizada' || countData.status === 'arquivada') {
+    throw new Error('Reabra a contagem antes de alterar a planilha')
+  }
+
+  validatePlanRows(items)
+
+  const { error: delErr } = await supabase.from('plan_items').delete().eq('count_id', count_id)
+  if (delErr) throw delErr
+
+  await savePlanItems(count_id, items)
+}
+
+function validatePlanRows(items: { codigo: string; nome: string; saldo: number }[]) {
+  if (!items || !InputValidator.nonEmptyArray(items)) {
+    throw new Error('Lista de itens nÃ£o pode estar vazia')
+  }
+
+  if (items.length > 10000) {
+    throw new Error('Limite de 10000 itens por contagem excedido')
+  }
+
+  items.forEach((r, idx) => {
+    const sanitizedCodigo = InputValidator.sanitizeText(r.codigo.trim())
+    const sanitizedNome = InputValidator.sanitizeText(r.nome.trim())
+
+    if (!sanitizedCodigo) throw new Error(`Item ${idx + 1}: CÃ³digo nÃ£o pode estar vazio`)
+    if (!InputValidator.productCode(sanitizedCodigo)) throw new Error(`Item ${idx + 1}: CÃ³digo de produto invÃ¡lido`)
+    if (!sanitizedNome) throw new Error(`Item ${idx + 1}: Nome do produto nÃ£o pode estar vazio`)
+    if (!InputValidator.quantity(r.saldo)) throw new Error(`Item ${idx + 1}: Quantidade invÃ¡lida (deve ser 0-999999)`)
+  })
+}
+
 export async function addManualEntry(count_id: string, codigo: string, qty: number = 1) {
   // Validação de count_id
   if (!InputValidator.uuid(count_id)) {
@@ -230,11 +282,38 @@ export async function listManualEntries(count_id: string) {
 }
 
 export async function updateManualEntry(id: string, changes: { codigo?: string; qty?: number }) {
-  const { error } = await supabase.from('manual_entries').update(changes).eq('id', id)
+  if (!InputValidator.uuid(id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_MANUAL_ENTRY_ID', { id })
+    throw new Error('ID da entrada invÃ¡lido')
+  }
+
+  const cleanUpdates: { codigo?: string; qty?: number } = {}
+
+  if (changes.codigo !== undefined) {
+    const sanitizedCodigo = InputValidator.sanitizeText(changes.codigo.trim())
+    if (!InputValidator.productCode(sanitizedCodigo)) {
+      throw new Error('CÃ³digo de produto invÃ¡lido')
+    }
+    cleanUpdates.codigo = sanitizedCodigo
+  }
+
+  if (changes.qty !== undefined) {
+    if (!InputValidator.positiveInteger(changes.qty) || !InputValidator.quantity(changes.qty)) {
+      throw new Error('Quantidade invÃ¡lida')
+    }
+    cleanUpdates.qty = changes.qty
+  }
+
+  const { error } = await supabase.from('manual_entries').update(cleanUpdates).eq('id', id)
   if (error) throw error
 }
 
 export async function deleteManualEntry(id: string) {
+  if (!InputValidator.uuid(id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_MANUAL_ENTRY_ID', { id })
+    throw new Error('ID da entrada invÃ¡lido')
+  }
+
   const { error } = await supabase.from('manual_entries').delete().eq('id', id)
   if (error) throw error
 }
@@ -249,7 +328,12 @@ export async function deleteManualEntry(id: string) {
  * @param search Filtro opcional por nome
  * @returns Contagens ordenadas por data mais recente
  */
-export async function getCounts(limit = 10, from = 0, search = '') {
+export async function getCounts(
+  limit = 10,
+  from = 0,
+  search = '',
+  status: 'ativas' | 'em_andamento' | 'finalizada' | 'reaberta' | 'arquivada' = 'ativas'
+) {
   const user_id = await getCurrentUserId()
   
   let q = supabase
@@ -260,11 +344,79 @@ export async function getCounts(limit = 10, from = 0, search = '') {
     .order('created_at', { ascending: false })
     .range(from, from + limit - 1)
   
-  if (search) q = q.ilike('nome', `%${search}%`)
+  if (status === 'ativas') {
+    q = q.neq('status', 'arquivada')
+  } else if (status === 'reaberta') {
+    q = q.in('status', ['reaberta', 'reavertida'])
+  } else {
+    q = q.eq('status', status)
+  }
+
+  const trimmedSearch = search.trim()
+  if (trimmedSearch) q = q.ilike('nome', `%${trimmedSearch}%`)
   
   const { data, error } = await q
   if (error) throw error
   return data as Count[]
+}
+
+export async function updateCountName(count_id: string, nome: string) {
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_RENAME', { count_id })
+    throw new Error('ID da contagem invÃ¡lido')
+  }
+
+  const user_id = await getCurrentUserId()
+  const sanitizedNome = InputValidator.sanitizeText(nome)
+  if (!sanitizedNome || sanitizedNome.length < 1 || sanitizedNome.length > 100) {
+    throw new Error('Nome da contagem invÃ¡lido (1-100 caracteres)')
+  }
+
+  const { data, error } = await supabase
+    .from('counts')
+    .update({ nome: sanitizedNome })
+    .eq('id', count_id)
+    .eq('user_id', user_id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as Count
+}
+
+export async function archiveCount(count_id: string) {
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_ARCHIVE', { count_id })
+    throw new Error('ID da contagem invÃ¡lido')
+  }
+
+  const user_id = await getCurrentUserId()
+  const { data, error } = await supabase
+    .from('counts')
+    .update({ status: 'arquivada' })
+    .eq('id', count_id)
+    .eq('user_id', user_id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as Count
+}
+
+export async function deleteCount(count_id: string) {
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_DELETE', { count_id })
+    throw new Error('ID da contagem invÃ¡lido')
+  }
+
+  const user_id = await getCurrentUserId()
+  const { error } = await supabase
+    .from('counts')
+    .delete()
+    .eq('id', count_id)
+    .eq('user_id', user_id)
+
+  if (error) throw error
 }
 
 export async function getCountById(id: string) {
@@ -456,10 +608,10 @@ export async function reopenCount(count_id: string) {
     throw new Error('Erro ao limpar resultados anteriores: ' + delErr.message)
   }
   
-  // Marcar contagem como reavertida
+  // Marcar contagem como reaberta
   const { data: updated, error: updateErr } = await supabase
     .from('counts')
-    .update({ status: 'reavertida' })
+    .update({ status: 'reaberta' })
     .eq('id', count_id)
     .select('*')
     .single()
@@ -469,7 +621,7 @@ export async function reopenCount(count_id: string) {
     throw new Error('Erro ao reabrir contagem: ' + updateErr.message)
   }
   
-  console.log(`✓ Contagem reavertida com sucesso: ${count_id}`)
+  console.log(`Contagem reaberta com sucesso: ${count_id}`)
   return updated as Count
 }
 

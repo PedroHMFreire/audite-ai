@@ -3,17 +3,12 @@ import { Bell, X, CheckCircle2, AlertCircle, Info } from 'lucide-react'
 import {
   getUnreadNotifications,
   getUnreadNotificationsCount,
-  markNotificationAsRead,
-  type NotificationPreferences
+  markNotificationAsRead
 } from '../lib/scheduleNotifications'
 import { useAuth } from '../contexts/AuthContext'
 import { type Notification } from '../types/notifications'
 
-interface NotificationCenterProps {
-  preferences: NotificationPreferences | null
-}
-
-export default function NotificationCenter({ preferences }: NotificationCenterProps) {
+export default function NotificationCenter() {
   const { user } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -58,8 +53,7 @@ export default function NotificationCenter({ preferences }: NotificationCenterPr
     }
   }
 
-  const handleNewNotification = (event: CustomEvent) => {
-    const newNotification = event.detail
+  const handleNewNotification = (_event: CustomEvent) => {
     
     // Adicionar à lista (será buscado do banco em breve)
     loadNotifications()
@@ -237,7 +231,7 @@ export default function NotificationCenter({ preferences }: NotificationCenterPr
           {notifications.length > 0 && (
             <div className="border-t border-gray-200 px-4 py-3 text-center">
               <a
-                href="/notifications"
+                href="/notificacoes"
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
                 Ver todas as notificações

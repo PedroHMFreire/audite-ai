@@ -1,22 +1,21 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import CoverageProgressBar from '@/components/CoverageProgressBar'
+import ConfirmFinalizationModal from '@/components/ConfirmFinalizationModal'
 import FileUpload from '@/components/FileUpload'
 import ManualEntry from '@/components/ManualEntry'
 import { useToast } from '@/components/Toast'
-import ConfirmFinalizationModal from '@/components/ConfirmFinalizationModal'
-import CoverageProgressBar from '@/components/CoverageProgressBar'
 import {
   addManualEntry,
   computeAndSaveResults,
-  getCountById,
-  savePlanItems,
-  listManualEntries,
-  updateManualEntry,
   deleteManualEntry,
+  getCountById,
   getPlanItems,
+  listManualEntries,
+  replacePlanItems,
+  updateManualEntry,
   type Count
 } from '@/lib/db'
-import { supabase } from '@/lib/supabaseClient'
 
 type PlanRow = { codigo: string; nome: string; saldo: number }
 type Entry = { id: string; count_id: string; codigo: string; qty?: number; created_at: string }
@@ -31,326 +30,223 @@ export default function CountDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editCode, setEditCode] = useState<string>('')
+  const [editCode, setEditCode] = useState('')
   const [editQty, setEditQty] = useState<number>(1)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
-  // Validação de UUID
-  const isValidUUID = (uuid: string) => {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    return uuidRegex.test(uuid)
-  }
+  const isEditable = count?.status !== 'finalizada' && count?.status !== 'arquivada'
+  const canViewReport = count?.status === 'finalizada'
 
   useEffect(() => {
-    if (!id) {
-      nav('/')
-      return
-    }
-    
-    if (!isValidUUID(id)) {
-      addToast({
-        type: 'error',
-        message: 'ID da contagem inválido'
-      })
-      nav('/')
+    if (!id || !isValidUUID(id)) {
+      addToast({ type: 'error', message: 'ID da contagem invalido' })
+      nav('/contagens')
       return
     }
 
-    const loadData = async () => {
+    let cancelled = false
+
+    async function loadData() {
       setLoading(true)
       setError(null)
-      
+
       try {
         const [countData, planData, entriesData] = await Promise.all([
-          getCountById(id),
-          getPlanItems(id),
-          listManualEntries(id)
+          getCountById(id!),
+          getPlanItems(id!),
+          listManualEntries(id!)
         ])
-        
+
+        if (cancelled) return
         setCount(countData)
         setPlan(planData)
         setEntries(entriesData)
       } catch (err) {
+        if (cancelled) return
         const message = err instanceof Error ? err.message : 'Erro ao carregar dados'
         setError(message)
-        addToast({
-          type: 'error',
-          message: 'Erro ao carregar contagem',
-          description: message
-        })
-        console.error('Erro ao carregar contagem:', err)
+        addToast({ type: 'error', message: 'Erro ao carregar contagem', description: message })
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     loadData()
+    return () => {
+      cancelled = true
+    }
   }, [id, nav, addToast])
 
   const refreshPlan = useCallback(async () => {
     if (!id) return
-    try {
-      const rows = await getPlanItems(id)
-      setPlan(rows)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao carregar planilha'
-      addToast({
-        type: 'error',
-        message: 'Erro ao carregar planilha',
-        description: message
-      })
-      console.error('Erro ao carregar planilha:', err)
-    }
-  }, [id, addToast])
+    const rows = await getPlanItems(id)
+    setPlan(rows)
+  }, [id])
 
   const refreshEntries = useCallback(async () => {
     if (!id) return
-    try {
-      const rows = await listManualEntries(id)
-      setEntries(rows)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao carregar entradas'
-      addToast({
-        type: 'error',
-        message: 'Erro ao carregar entradas',
-        description: message
-      })
-      console.error('Erro ao carregar entradas:', err)
-    }
-  }, [id, addToast])
+    const rows = await listManualEntries(id)
+    setEntries(rows)
+  }, [id])
 
   const onParsed = useCallback(async (items: PlanRow[]) => {
     if (!id) return
-    
-    try {
-      setPlan(items)
-      
-      // Validar que count pertence ao usuário antes de deletar
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError || !session?.user?.id) {
-        throw new Error('Usuário não autenticado')
-      }
-
-      const { data: countData, error: countError } = await supabase
-        .from('counts')
-        .select('id')
-        .eq('id', id)
-        .eq('user_id', session.user.id)
-        .single()
-
-      if (countError || !countData) {
-        throw new Error('Você não tem permissão para modificar esta contagem')
-      }
-
-      // Agora sim delete com segurança
-      await supabase.from('plan_items').delete().eq('count_id', id)
-      await savePlanItems(id, items)
-      
+    if (!isEditable) {
       addToast({
-        type: 'success',
-        message: 'Planilha carregada com sucesso!'
+        type: 'warning',
+        message: 'Contagem bloqueada',
+        description: 'Reabra a contagem antes de alterar a planilha'
       })
+      return
+    }
+
+    try {
+      await replacePlanItems(id, items)
       await refreshPlan()
+      addToast({ type: 'success', message: 'Planilha carregada com sucesso!' })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao salvar planilha'
-      addToast({
-        type: 'error',
-        message: 'Erro ao salvar planilha',
-        description: message
-      })
-      console.error('Erro ao processar planilha:', err)
+      addToast({ type: 'error', message: 'Erro ao salvar planilha', description: message })
     }
-  }, [id, refreshPlan, addToast])
+  }, [id, isEditable, refreshPlan, addToast])
 
   const onAdd = useCallback(async (codigo: string, qty: number = 1) => {
     if (!id) return
-    
-    // 🎯 VALIDAÇÃO DE CÓDIGO DESCONHECIDO - Nova funcionalidade!
+    if (!isEditable) {
+      addToast({
+        type: 'warning',
+        message: 'Contagem bloqueada',
+        description: 'Reabra a contagem antes de inserir itens'
+      })
+      return
+    }
+
     const planCodes = new Set(plan.map(p => p.codigo))
     if (!planCodes.has(codigo) && plan.length > 0) {
       addToast({
         type: 'warning',
-        message: 'Código desconhecido',
-        description: `"${codigo}" não está na planilha atual`,
-        duration: 5000 // 5 segundos para warning
+        message: 'Codigo desconhecido',
+        description: `"${codigo}" nao esta na planilha atual`,
+        duration: 5000
       })
     }
-    
+
     try {
       await addManualEntry(id, codigo, qty)
       await refreshEntries()
-      
-      // Toast de sucesso mais discreto para não poluir
-      if (planCodes.has(codigo)) {
-        addToast({
-          type: 'success',
-          message: 'Item adicionado',
-          duration: 2000 // 2 segundos apenas
-        })
-      }
+      if (planCodes.has(codigo)) addToast({ type: 'success', message: 'Item adicionado', duration: 2000 })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao adicionar item'
-      addToast({
-        type: 'error',
-        message: 'Erro ao adicionar item',
-        description: message
-      })
-      console.error('Erro ao adicionar entrada:', err)
+      addToast({ type: 'error', message: 'Erro ao adicionar item', description: message })
     }
-  }, [id, plan, refreshEntries, addToast])
+  }, [id, isEditable, plan, refreshEntries, addToast])
 
-  const startEdit = useCallback((e: Entry) => {
-    setEditingId(e.id)
-    setEditCode(e.codigo)
-    setEditQty(e.qty || 1)
+  const startEdit = useCallback((entry: Entry) => {
+    setEditingId(entry.id)
+    setEditCode(entry.codigo)
+    setEditQty(entry.qty || 1)
   }, [])
 
   const saveEdit = useCallback(async () => {
-    if (!editingId) return
-    
+    if (!editingId || !isEditable) return
+
     try {
-      await updateManualEntry(editingId, { 
-        codigo: editCode.trim(), 
-        qty: Math.max(1, Number(editQty) || 1) 
+      await updateManualEntry(editingId, {
+        codigo: editCode.trim(),
+        qty: Math.max(1, Number(editQty) || 1)
       })
       setEditingId(null)
       await refreshEntries()
-      addToast({
-        type: 'success',
-        message: 'Item atualizado',
-        duration: 2000
-      })
+      addToast({ type: 'success', message: 'Item atualizado', duration: 2000 })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao atualizar item'
-      addToast({
-        type: 'error',
-        message: 'Erro ao atualizar item',
-        description: message
-      })
-      console.error('Erro ao salvar edição:', err)
+      addToast({ type: 'error', message: 'Erro ao atualizar item', description: message })
     }
-  }, [editingId, editCode, editQty, refreshEntries, addToast])
+  }, [editingId, isEditable, editCode, editQty, refreshEntries, addToast])
 
-  const cancelEdit = useCallback(() => {
-    setEditingId(null)
-    setEditCode('')
-    setEditQty(1)
-  }, [])
-
-  const removeEntry = useCallback(async (idRow: string) => {
+  const removeEntry = useCallback(async (entryId: string) => {
+    if (!isEditable) return
     if (!confirm('Remover este item?')) return
-    
+
     try {
-      await deleteManualEntry(idRow)
+      await deleteManualEntry(entryId)
       await refreshEntries()
-      addToast({
-        type: 'info',
-        message: 'Item removido',
-        duration: 2000
-      })
+      addToast({ type: 'info', message: 'Item removido', duration: 2000 })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao remover item'
-      addToast({
-        type: 'error',
-        message: 'Erro ao remover item',
-        description: message
-      })
-      console.error('Erro ao remover entrada:', err)
+      addToast({ type: 'error', message: 'Erro ao remover item', description: message })
     }
-  }, [refreshEntries, addToast])
+  }, [isEditable, refreshEntries, addToast])
 
-  // >>> NOVO: totais de códigos e itens (planilha x inseridos)
   const totals = useMemo(() => {
     const planCodes = plan.length
     const planItems = plan.reduce((acc, p) => acc + (Number(p.saldo) || 0), 0)
-
     const insertedItems = entries.reduce((acc, e) => acc + (Number(e.qty) || 1), 0)
     const insertedCodes = new Set(entries.map(e => e.codigo)).size
-
     return { planCodes, planItems, insertedCodes, insertedItems }
   }, [plan, entries])
 
-  // Cards de categoria (reg/exc/fal) continuam iguais
   const stats = useMemo(() => {
     const mapPlan = new Map<string, number>()
-    for (const p of plan) mapPlan.set(p.codigo, p.saldo)
     const mapAdd = new Map<string, number>()
-    for (const a of entries) mapAdd.set(a.codigo, (mapAdd.get(a.codigo) || 0) + (a.qty || 1))
 
-    let reg = 0, exc = 0, fal = 0
-    for (const [c, saldo] of mapPlan.entries()) {
-      const m = mapAdd.get(c) || 0
-      if (m === saldo) reg++
-      else if (m === 0) fal++
+    for (const p of plan) mapPlan.set(p.codigo, p.saldo)
+    for (const entry of entries) mapAdd.set(entry.codigo, (mapAdd.get(entry.codigo) || 0) + (entry.qty || 1))
+
+    let reg = 0
+    let exc = 0
+    let fal = 0
+
+    for (const [codigo, saldo] of mapPlan.entries()) {
+      const counted = mapAdd.get(codigo) || 0
+      if (counted === saldo) reg++
+      else if (counted < saldo) fal++
+      else exc++
     }
-    for (const [c] of mapAdd.entries()) {
-      if (!mapPlan.has(c)) exc++
+
+    for (const codigo of mapAdd.keys()) {
+      if (!mapPlan.has(codigo)) exc++
     }
+
     return { reg, exc, fal }
   }, [plan, entries])
 
   const finalizar = useCallback(async () => {
-    if (!id) {
-      console.error('❌ Erro: ID da contagem está vazio')
-      addToast({
-        type: 'error',
-        message: 'Erro interno',
-        description: 'ID da contagem não encontrado'
-      })
-      return
-    }
-    
-    console.log('🔄 Iniciando finalização da contagem...', { count_id: id })
+    if (!id || !isEditable) return
     setIsProcessing(true)
-    
+
     try {
-      console.log('📊 Calculando resultados...')
       const results = await computeAndSaveResults(id)
-      
-      console.log(`✓ Contagem finalizada com sucesso! ${results.length} resultados salvos`)
       addToast({
         type: 'success',
         message: 'Contagem finalizada!',
         description: `${results.length} itens processados. Redirecionando...`
       })
-      
-      // Aguarda um pouco para o toast aparecer antes de navegar
-      setTimeout(() => {
-        nav(`/relatorio/${id}`)
-      }, 1000)
+      setCount(prev => prev ? { ...prev, status: 'finalizada' } : prev)
+      window.setTimeout(() => nav(`/relatorio/${id}`), 1000)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro desconhecido ao finalizar contagem'
-      console.error('❌ Erro ao finalizar:', message, err)
-      
-      addToast({
-        type: 'error',
-        message: 'Erro ao finalizar contagem',
-        description: message
-      })
+      addToast({ type: 'error', message: 'Erro ao finalizar contagem', description: message })
     } finally {
       setIsProcessing(false)
       setShowConfirmModal(false)
     }
-  }, [id, nav, addToast])
+  }, [id, isEditable, nav, addToast])
 
   const handleFinalizarClick = useCallback(() => {
-    console.log('🔍 Validando antes de finalizar...', { planCodes: totals.planCodes, entradas: entries.length })
-    
-    // Validação 1: Verifica se há planilha carregada
+    if (!isEditable) return
+
     if (plan.length === 0) {
-      console.warn('⚠️ Validação falhou: Planilha vazia')
       addToast({
         type: 'error',
-        message: 'Planilha não carregada',
-        description: 'Envie a planilha de códigos antes de finalizar'
+        message: 'Planilha nao carregada',
+        description: 'Envie a planilha de codigos antes de finalizar'
       })
       return
     }
 
-    // Validação 2: Verifica se há itens inseridos
     if (entries.length === 0) {
-      console.warn('⚠️ Validação falhou: Nenhum item inserido')
       addToast({
         type: 'error',
         message: 'Nenhum item inserido',
@@ -359,21 +255,9 @@ export default function CountDetail() {
       return
     }
 
-    // Todas as validações passaram
-    console.log('✓ Validações passaram. Abrindo modal de confirmação...')
     setShowConfirmModal(true)
-  }, [plan, entries, addToast, totals])
+  }, [isEditable, plan, entries, addToast])
 
-  // Verifica se componente ainda está montado antes de atualizar estado
-  useEffect(() => {
-    let isMounted = true
-    
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  // Loading state
   if (loading) {
     return (
       <div className="space-y-6">
@@ -384,15 +268,14 @@ export default function CountDetail() {
     )
   }
 
-  // Error state
   if (error) {
     return (
       <div className="space-y-6">
         <div className="card">
           <div className="text-center py-6">
-            <div className="text-red-500 mb-2">⚠️ Erro</div>
+            <div className="text-red-500 mb-2">Erro</div>
             <div className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">{error}</div>
-            <Link to="/" className="btn">Voltar para Home</Link>
+            <Link to="/contagens" className="btn">Voltar para contagens</Link>
           </div>
         </div>
       </div>
@@ -401,23 +284,35 @@ export default function CountDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Contagem: {count?.nome || '...'}</h1>
-        <Link to={`/relatorio/${id}`} className="badge">Ver relatório</Link>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Contagem: {count?.nome || '...'}</h1>
+          {!isEditable && (
+            <div className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              {count?.status === 'arquivada' ? 'Contagem arquivada' : 'Contagem finalizada'}.
+            </div>
+          )}
+        </div>
+        {canViewReport && <Link to={`/relatorio/${id}`} className="badge">Ver relatorio</Link>}
       </div>
 
-      <div className="card space-y-4">
+      {!isEditable && (
+        <div className="card border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 text-sm text-yellow-800 dark:text-yellow-100">
+          Esta contagem esta bloqueada para edicao. Reabra a contagem pelo relatorio para alterar planilha ou itens.
+        </div>
+      )}
+
+      <div className={`card space-y-4 ${!isEditable ? 'opacity-70' : ''}`}>
         <div>
-          <div className="text-sm mb-2">1) Envie a planilha (código | nome | saldo)</div>
+          <div className="text-sm mb-2">1) Envie a planilha (codigo | nome | saldo)</div>
           <FileUpload onParsed={onParsed} />
         </div>
         <div>
-          <div className="text-sm mb-2">2) Insira os códigos encontrados no estoque</div>
+          <div className="text-sm mb-2">2) Insira os codigos encontrados no estoque</div>
           <ManualEntry onAdd={onAdd} />
         </div>
       </div>
 
-      {/* Barra de cobertura com status detalhado */}
       <CoverageProgressBar
         planCodes={totals.planCodes}
         insertedCodes={totals.insertedCodes}
@@ -425,31 +320,17 @@ export default function CountDetail() {
         insertedItems={totals.insertedItems}
       />
 
-      {/* Resumo de quantidades (mobile-first) - Cards compactos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="card">
-          <div className="text-xs text-zinc-500">Planilha • Códigos</div>
-          <div className="text-2xl font-semibold">{totals.planCodes}</div>
-        </div>
-        <div className="card">
-          <div className="text-xs text-zinc-500">Planilha • Itens</div>
-          <div className="text-2xl font-semibold">{totals.planItems}</div>
-        </div>
-        <div className="card">
-          <div className="text-xs text-zinc-500">Inseridos • Códigos</div>
-          <div className="text-2xl font-semibold">{totals.insertedCodes}</div>
-        </div>
-        <div className="card">
-          <div className="text-xs text-zinc-500">Inseridos • Itens</div>
-          <div className="text-2xl font-semibold">{totals.insertedItems}</div>
-        </div>
+        <MetricCard label="Planilha - Codigos" value={totals.planCodes} />
+        <MetricCard label="Planilha - Itens" value={totals.planItems} />
+        <MetricCard label="Inseridos - Codigos" value={totals.insertedCodes} />
+        <MetricCard label="Inseridos - Itens" value={totals.insertedItems} />
       </div>
 
-      {/* Cards de categoria (mantidos) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="card"><div className="text-xs text-zinc-500">Regulares</div><div className="text-2xl font-semibold">{stats.reg}</div></div>
-        <div className="card"><div className="text-xs text-zinc-500">Excesso</div><div className="text-2xl font-semibold">{stats.exc}</div></div>
-        <div className="card"><div className="text-xs text-zinc-500">Falta</div><div className="text-2xl font-semibold">{stats.fal}</div></div>
+        <MetricCard label="Regulares" value={stats.reg} />
+        <MetricCard label="Excesso" value={stats.exc} />
+        <MetricCard label="Falta" value={stats.fal} />
       </div>
 
       <div className="card">
@@ -458,59 +339,42 @@ export default function CountDetail() {
           <div className="text-xs text-zinc-500 dark:text-zinc-400">Mais recentes primeiro</div>
         </div>
         <ul className="max-h-80 overflow-auto text-sm divide-y divide-zinc-100 dark:divide-zinc-800 rounded-lg border border-zinc-100 dark:border-zinc-800">
-          {entries.map((e, idx) => {
+          {entries.map((entry, idx) => {
             const striped = idx % 2 === 0
             return (
-              <li 
-                key={e.id} 
+              <li
+                key={entry.id}
                 className={`py-3 px-4 flex items-center gap-3 transition-colors ${
-                  striped 
-                    ? 'bg-white dark:bg-zinc-900' 
-                    : 'bg-zinc-50 dark:bg-zinc-800/50'
+                  striped ? 'bg-white dark:bg-zinc-900' : 'bg-zinc-50 dark:bg-zinc-800/50'
                 } hover:bg-zinc-100 dark:hover:bg-zinc-700`}
               >
-                {editingId === e.id ? (
+                {editingId === entry.id ? (
                   <div className="flex items-center gap-2 flex-1">
-                    <input 
-                      className="input text-sm flex-1" 
-                      value={editCode} 
-                      onChange={ev=>setEditCode(ev.target.value)}
-                      autoFocus
-                    />
-                    <input 
-                      className="input text-sm w-20" 
+                    <input className="input text-sm flex-1" value={editCode} onChange={ev => setEditCode(ev.target.value)} autoFocus />
+                    <input
+                      className="input text-sm w-20"
                       type="number"
                       min="1"
-                      value={editQty} 
-                      onChange={ev=>setEditQty(ev.target.value === '' ? 1 : Math.max(1, Number(ev.target.value) || 1))} 
+                      value={editQty}
+                      onChange={ev => setEditQty(ev.target.value === '' ? 1 : Math.max(1, Number(ev.target.value) || 1))}
                     />
-                    <button className="badge bg-green-600 hover:bg-green-700 text-white text-xs" onClick={saveEdit}>✓</button>
-                    <button className="badge bg-zinc-400 hover:bg-zinc-500 text-white text-xs" onClick={cancelEdit}>✕</button>
+                    <button className="badge bg-green-600 hover:bg-green-700 text-white text-xs" onClick={saveEdit}>Salvar</button>
+                    <button className="badge bg-zinc-400 hover:bg-zinc-500 text-white text-xs" onClick={() => setEditingId(null)}>Cancelar</button>
                   </div>
                 ) : (
                   <>
                     <div className="flex-1 min-w-0">
-                      <div className="font-mono font-semibold text-zinc-900 dark:text-white">{e.codigo}</div>
+                      <div className="font-mono font-semibold text-zinc-900 dark:text-white">{entry.codigo}</div>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        Qtd: <span className="font-medium">{e.qty || 1}</span> • {new Date(e.created_at).toLocaleTimeString()}
+                        Qtd: <span className="font-medium">{entry.qty || 1}</span> - {new Date(entry.created_at).toLocaleTimeString()}
                       </div>
                     </div>
-                    <div className="flex gap-1.5 flex-shrink-0">
-                      <button 
-                        className="badge bg-blue-600 hover:bg-blue-700 text-white text-xs px-2" 
-                        onClick={()=>startEdit(e)}
-                        title="Editar este item"
-                      >
-                        Editar
-                      </button>
-                      <button 
-                        className="badge bg-red-600 hover:bg-red-700 text-white text-xs px-2" 
-                        onClick={()=>removeEntry(e.id)}
-                        title="Remover este item"
-                      >
-                        Remover
-                      </button>
-                    </div>
+                    {isEditable && (
+                      <div className="flex gap-1.5 flex-shrink-0">
+                        <button className="badge bg-blue-600 hover:bg-blue-700 text-white text-xs px-2" onClick={() => startEdit(entry)}>Editar</button>
+                        <button className="badge bg-red-600 hover:bg-red-700 text-white text-xs px-2" onClick={() => removeEntry(entry.id)}>Remover</button>
+                      </div>
+                    )}
                   </>
                 )}
               </li>
@@ -525,10 +389,12 @@ export default function CountDetail() {
       </div>
 
       <div className="flex gap-3">
-        <button className="btn" onClick={handleFinalizarClick} disabled={isProcessing}>
-          {isProcessing ? 'Processando…' : 'Finalizar contagem'}
-        </button>
-        <Link to="/" className="badge">Voltar</Link>
+        {isEditable && (
+          <button className="btn" onClick={handleFinalizarClick} disabled={isProcessing}>
+            {isProcessing ? 'Processando...' : 'Finalizar contagem'}
+          </button>
+        )}
+        <Link to="/contagens" className="badge">Voltar</Link>
       </div>
 
       <ConfirmFinalizationModal
@@ -543,4 +409,17 @@ export default function CountDetail() {
       />
     </div>
   )
+}
+
+function MetricCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="card">
+      <div className="text-xs text-zinc-500">{label}</div>
+      <div className="text-2xl font-semibold">{value}</div>
+    </div>
+  )
+}
+
+function isValidUUID(uuid: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(uuid)
 }

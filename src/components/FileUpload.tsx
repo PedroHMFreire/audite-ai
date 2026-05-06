@@ -1,5 +1,3 @@
-import ExcelJS from 'exceljs'
-
 type Item = { codigo: string; nome: string; saldo: number }
 
 export default function FileUpload({ onParsed }: { onParsed: (rows: Item[]) => void }) {
@@ -16,12 +14,13 @@ export default function FileUpload({ onParsed }: { onParsed: (rows: Item[]) => v
     try {
       if (fileName.endsWith('.csv')) {
         const text = await file.text()
-        onParsed(parseRows(text.split(/\r?\n/).map((line) => line.split(','))))
+        onParsed(parseRows(parseCsv(text)))
         return
       }
 
       const arrayBuffer = await file.arrayBuffer()
-      const workbook = new ExcelJS.Workbook()
+      const { Workbook } = await import('exceljs')
+      const workbook = new Workbook()
       await workbook.xlsx.load(arrayBuffer)
 
       const worksheet = workbook.worksheets[0]
@@ -53,6 +52,56 @@ export default function FileUpload({ onParsed }: { onParsed: (rows: Item[]) => v
       if (codigo) rows.push({ codigo, nome, saldo })
     }
     return rows
+  }
+
+  function parseCsv(text: string): string[][] {
+    const rows: string[][] = []
+    let row: string[] = []
+    let field = ''
+    let inQuotes = false
+    const delimiter = detectDelimiter(text)
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i]
+      const next = text[i + 1]
+
+      if (char === '"' && inQuotes && next === '"') {
+        field += '"'
+        i++
+        continue
+      }
+
+      if (char === '"') {
+        inQuotes = !inQuotes
+        continue
+      }
+
+      if (char === delimiter && !inQuotes) {
+        row.push(field.trim())
+        field = ''
+        continue
+      }
+
+      if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && next === '\n') i++
+        row.push(field.trim())
+        if (row.some(Boolean)) rows.push(row)
+        row = []
+        field = ''
+        continue
+      }
+
+      field += char
+    }
+
+    row.push(field.trim())
+    if (row.some(Boolean)) rows.push(row)
+    return rows
+  }
+
+  function detectDelimiter(text: string) {
+    const firstLine = text.split(/\r?\n/, 1)[0] || ''
+    return firstLine.split(';').length > firstLine.split(',').length ? ';' : ','
   }
 
   return (
