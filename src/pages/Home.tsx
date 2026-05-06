@@ -7,6 +7,7 @@ import { RecentCountsTimeline } from '@/components/RecentCountsTimeline'
 import StorePerformance from '@/components/StorePerformance'
 import ContextualSidebar from '@/components/ContextualSidebar'
 import TutorialModal from '@/components/TutorialModal'
+import { HighlightsSection } from '@/components/HighlightsSection'
 import { createCount, getTotalsLastCounts } from '@/lib/db'
 import { supabase } from '@/lib/supabaseClient'
 import { SkeletonLoader } from '@/components/SkeletonLoader'
@@ -57,66 +58,74 @@ export default function Home() {
   }
 
   return (
-    <div className="flex-1">
-      <div className="max-w-7xl mx-auto px-4 py-6 lg:pr-80">
-        <div className="space-y-6">
-          {/* Card de ação rápida */}
-          <div data-quick-action>
-            <QuickActionCard onStartCount={handleStartCount} />
+    <div className="flex-1 flex flex-col lg:flex-row gap-6">
+      {/* MAIN CONTENT */}
+      <div className="flex-1 min-w-0">
+        <div className="max-w-7xl px-4 py-6">
+          <div className="space-y-6">
+            {/* Card de ação rápida */}
+            <div data-quick-action>
+              <QuickActionCard onStartCount={handleStartCount} />
+            </div>
+
+            {/* Highlights section - Desktop only */}
+            <HighlightsSection />
+
+            {loading ? (
+              <SkeletonLoader />
+            ) : (
+              <>
+                {/* KPI Cards */}
+                {(() => {
+                  const trends = {
+                    regular: { value: '+12% vs semana passada', direction: 'up' as const },
+                    excesso: { value: '-5% vs semana passada', direction: 'down' as const },
+                    falta: { value: '+3% vs semana passada', direction: 'up' as const }
+                  }
+
+                  const sparklines = {
+                    regular: chart.map(c => c.Regular),
+                    excesso: chart.map(c => c.Excesso),
+                    falta: chart.map(c => c.Falta)
+                  }
+
+                  return (
+                    <DashboardCards 
+                      totals={totals}
+                      trends={trends}
+                      sparklines={sparklines}
+                      targets={{ regular: 100, excesso: 20, falta: 10 }}
+                    />
+                  )
+                })()}
+
+                {/* Gráfico */}
+                <Charts data={chart} />
+
+                {/* Seção inferior com Timeline e Performance */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Timeline de contagens */}
+                  <RecentCountsTimeline />
+
+                  {/* Performance por loja */}
+                  <StorePerformance />
+                </div>
+              </>
+            )}
           </div>
 
-          {loading ? (
-            <SkeletonLoader />
-          ) : (
-            <>
-              {/* KPI Cards */}
-              {(() => {
-                const trends = {
-                  regular: { value: '+12% vs semana passada', direction: 'up' as const },
-                  excesso: { value: '-5% vs semana passada', direction: 'down' as const },
-                  falta: { value: '+3% vs semana passada', direction: 'up' as const }
-                }
-
-                const sparklines = {
-                  regular: chart.map(c => c.Regular),
-                  excesso: chart.map(c => c.Excesso),
-                  falta: chart.map(c => c.Falta)
-                }
-
-                return (
-                  <DashboardCards 
-                    totals={totals}
-                    trends={trends}
-                    sparklines={sparklines}
-                    targets={{ regular: 100, excesso: 20, falta: 10 }}
-                  />
-                )
-              })()}
-
-              {/* Gráfico */}
-              <Charts data={chart} />
-
-              {/* Seção inferior com Timeline e Performance */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Timeline de contagens */}
-                <RecentCountsTimeline />
-
-                {/* Performance por loja */}
-                <StorePerformance />
-              </div>
-            </>
-          )}
+          {/* Tutorial Modal */}
+          <TutorialModal 
+            isOpen={showTutorial} 
+            onClose={() => setShowTutorial(false)} 
+          />
         </div>
-
-        {/* Tutorial Modal */}
-        <TutorialModal 
-          isOpen={showTutorial} 
-          onClose={() => setShowTutorial(false)} 
-        />
       </div>
 
-      {/* Sidebar contextual (desktop only) */}
-      <ContextualSidebar onTutorialClick={() => setShowTutorial(true)} />
+      {/* SIDEBAR - Desktop only */}
+      <aside className="hidden lg:block w-80 bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-900/50 dark:to-zinc-800/30 rounded-xl border border-zinc-200 dark:border-zinc-700 h-fit sticky top-6">
+        <ContextualSidebar onTutorialClick={() => setShowTutorial(true)} />
+      </aside>
     </div>
   )
 }

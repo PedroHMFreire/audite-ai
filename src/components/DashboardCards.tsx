@@ -29,7 +29,7 @@ export default function DashboardCards({
   onCardClick
 }: Props) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5">
       <KPICard
         title="Produtos Regulares"
         value={totals.regular}
