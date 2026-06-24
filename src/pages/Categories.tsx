@@ -195,7 +195,7 @@ export default function Categories() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="card">
+        <div className="card max-w-2xl">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-medium">
@@ -264,9 +264,9 @@ export default function Categories() {
       )}
 
       {/* Categories List */}
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {categories.length === 0 ? (
-          <div className="card text-center py-8">
+          <div className="card text-center py-8 col-span-full">
             <div className="text-zinc-500 dark:text-zinc-400 mb-4">
               📂 Nenhuma categoria encontrada
             </div>

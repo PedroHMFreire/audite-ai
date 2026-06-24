@@ -178,11 +178,11 @@ export default function Counts() {
         </div>
       </div>
 
-      <ul className="space-y-2">
+      <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {loading && from === 0 ? (
-          <SkeletonLoader />
+          <li className="col-span-full list-none"><SkeletonLoader /></li>
         ) : items.length === 0 ? (
-          <EmptyState
+          <li className="col-span-full list-none"><EmptyState
             title={emptyCopy.title}
             description={emptyCopy.description}
             illustration={<EmptyCountsIllustration />}
@@ -190,7 +190,7 @@ export default function Counts() {
               label: appliedSearch ? 'Limpar pesquisa' : 'Ir para dashboard',
               onClick: () => appliedSearch ? clearSearch() : nav('/dashboard')
             }}
-          />
+          /></li>
         ) : (
           items.map(it => {
             const statusBadge = getStatusBadge(it.status)

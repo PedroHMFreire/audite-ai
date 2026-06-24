@@ -125,7 +125,7 @@ export default function Report() {
       />
 
       {/* Resumo Planilha x Inseridos - Cards compactos */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="card">
           <div className="text-xs text-zinc-500">Planilha • Códigos</div>
           <div className="text-2xl font-semibold">{totals.planCodes}</div>
@@ -145,7 +145,7 @@ export default function Report() {
       </div>
 
       {/* Totais por categoria (mantidos) */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 lg:max-w-2xl gap-3">
         <div className="card"><div className="text-xs text-zinc-500">Regulares</div><div className="text-2xl font-semibold">{catTotals.regular}</div></div>
         <div className="card"><div className="text-xs text-zinc-500">Excesso</div><div className="text-2xl font-semibold">{catTotals.excesso}</div></div>
         <div className="card"><div className="text-xs text-zinc-500">Falta</div><div className="text-2xl font-semibold">{catTotals.falta}</div></div>
