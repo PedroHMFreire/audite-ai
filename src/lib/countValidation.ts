@@ -5,7 +5,7 @@
  * o processo de contagem, com logs detalhados para debugging
  */
 
-import { supabase } from './supabaseClient'
+import { getPlanItems, listManualEntries, getResultsByCount } from './db'
 
 export interface CountValidationReport {
   count_id: string
@@ -51,32 +51,17 @@ export async function validateCountCalculations(count_id: string): Promise<Count
   const errors: string[] = []
   
   try {
-    // 1. Carregar plano
-    const { data: plan, error: pErr } = await supabase
-      .from('plan_items')
-      .select('codigo,nome,saldo')
-      .eq('count_id', count_id)
-    
-    if (pErr) throw new Error(`Erro carregando plano: ${pErr.message}`)
+    // 1-3. Carregar plano, entradas e resultados (leituras PAGINADAS — sem o
+    // limite de 1000 do PostgREST, que truncaria contagens grandes).
+    const [plan, entries, results] = await Promise.all([
+      getPlanItems(count_id),
+      listManualEntries(count_id),
+      getResultsByCount(count_id)
+    ])
+
     if (!plan || plan.length === 0) {
       errors.push('⚠️ Nenhum item no plano encontrado')
     }
-
-    // 2. Carregar entradas manuais
-    const { data: entries, error: mErr } = await supabase
-      .from('manual_entries')
-      .select('codigo,qty')
-      .eq('count_id', count_id)
-    
-    if (mErr) throw new Error(`Erro carregando entradas: ${mErr.message}`)
-
-    // 3. Carregar resultados
-    const { data: results, error: rErr } = await supabase
-      .from('results')
-      .select('codigo,status,manual_qtd,saldo_qtd,diferenca')
-      .eq('count_id', count_id)
-    
-    if (rErr) throw new Error(`Erro carregando resultados: ${rErr.message}`)
 
     // 4. Construir mapas para análise
     const planMap = new Map<string, { nome: string; saldo: number }>()

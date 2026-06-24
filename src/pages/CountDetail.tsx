@@ -217,11 +217,11 @@ export default function CountDetail() {
     setIsProcessing(true)
 
     try {
-      const results = await computeAndSaveResults(id)
+      const summary = await computeAndSaveResults(id)
       addToast({
         type: 'success',
         message: 'Contagem finalizada!',
-        description: `${results.length} itens processados. Redirecionando...`
+        description: `${summary.total} itens processados. Redirecionando...`
       })
       setCount(prev => prev ? { ...prev, status: 'finalizada' } : prev)
       window.setTimeout(() => nav(`/relatorio/${id}`), 1000)
