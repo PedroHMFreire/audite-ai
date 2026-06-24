@@ -7,6 +7,30 @@ export type PlanItem = { id?: string; count_id: string; codigo: string; nome: st
 export type ManualEntry = { id?: string; count_id: string; codigo: string; qty?: number; created_at?: string }
 export type Result = { id?: string; count_id: string; codigo: string; status: 'regular'|'excesso'|'falta'; manual_qtd: number; saldo_qtd: number; nome_produto: string }
 
+/**
+ * Busca TODAS as linhas filtradas por count_id, paginando em blocos de 1000.
+ * Contorna o limite padrão do PostgREST, que truncaria silenciosamente em
+ * 1000 linhas e corromperia o cruzamento em contagens grandes.
+ */
+async function fetchAllByCount<T>(table: string, columns: string, count_id: string): Promise<T[]> {
+  const PAGE = 1000
+  let from = 0
+  const all: T[] = []
+  for (;;) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .eq('count_id', count_id)
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    const batch = (data || []) as T[]
+    all.push(...batch)
+    if (batch.length < PAGE) break
+    from += PAGE
+  }
+  return all
+}
+
 // ===== NOVOS TIPOS PARA CRONOGRAMA =====
 export type Category = {
   id: string
@@ -263,22 +287,24 @@ export async function addManualEntry(count_id: string, codigo: string, qty: numb
     throw new Error(`Quantidade inválida: deve ser um número inteiro positivo (máx 999999)`)
   }
   
-  const { error } = await supabase.from('manual_entries').insert({ 
-    count_id, 
-    codigo: sanitizedCodigo, 
-    qty: Math.max(1, qty) 
+  // Upsert incremental no banco: 1 linha por (count_id, codigo), somando qty.
+  // Evita inflar a tabela com uma linha por scan e mantém o total correto.
+  const { error } = await supabase.rpc('add_manual_entry', {
+    p_count_id: count_id,
+    p_codigo: sanitizedCodigo,
+    p_qty: Math.max(1, qty)
   })
   if (error) throw error
 }
 
 export async function listManualEntries(count_id: string) {
-  const { data, error } = await supabase
-    .from('manual_entries')
-    .select('id,count_id,codigo,qty,created_at')
-    .eq('count_id', count_id)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data as { id: string; count_id: string; codigo: string; qty: number; created_at: string }[]
+  const rows = await fetchAllByCount<{ id: string; count_id: string; codigo: string; qty: number; created_at: string }>(
+    'manual_entries',
+    'id,count_id,codigo,qty,created_at',
+    count_id
+  )
+  // Mais recentes primeiro (ordenação no cliente, pois a leitura é paginada)
+  return rows.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))
 }
 
 export async function updateManualEntry(id: string, changes: { codigo?: string; qty?: number }) {
@@ -432,144 +458,35 @@ export async function getStoreById(id: string) {
 }
 
 export async function getPlanItems(count_id: string) {
-  const { data, error } = await supabase.from('plan_items').select('codigo,nome,saldo').eq('count_id', count_id)
-  if (error) throw error
-  return data as PlanItem[]
+  return await fetchAllByCount<PlanItem>('plan_items', 'codigo,nome,saldo', count_id)
 }
 
-export async function computeAndSaveResults(count_id: string) {
-  // Validação de UUID
+export type CountResultSummary = { regular: number; falta: number; excesso: number; total: number }
+
+/**
+ * Finaliza a contagem cruzando plano x entradas no PRÓPRIO banco (RPC).
+ * O cruzamento, a gravação de `results` e a finalização acontecem numa única
+ * transação no Postgres — sem limite de 1000 linhas, sem cálculo no celular e
+ * sem o risco de delete+insert parcial por queda de rede.
+ */
+export async function computeAndSaveResults(count_id: string): Promise<CountResultSummary> {
   if (!InputValidator.uuid(count_id)) {
     SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_COMPUTE', { count_id })
     throw new Error('ID da contagem inválido')
   }
 
-  // Validar que o count_id pertence ao usuário atual (RLS)
-  const user_id = await getCurrentUserId()
-  const { data: countData, error: countCheckErr } = await supabase
-    .from('counts')
-    .select('id')
-    .eq('id', count_id)
-    .eq('user_id', user_id)
-    .single()
-  
-  if (countCheckErr || !countData) {
-    SecurityLogger.logSuspiciousActivity('UNAUTHORIZED_COUNT_ACCESS', { count_id, user_id })
-    throw new Error('Você não tem permissão para finalizar esta contagem')
+  const { data, error } = await supabase.rpc('compute_count_results', { p_count_id: count_id })
+  if (error) {
+    console.error('Erro ao computar resultados:', error)
+    throw new Error('Erro ao finalizar contagem: ' + error.message)
   }
 
-  // Buscar planilha
-  const { data: plan, error: pErr } = await supabase
-    .from('plan_items')
-    .select('codigo,nome,saldo')
-    .eq('count_id', count_id)
-  if (pErr) {
-    console.error('Erro ao buscar planilha:', pErr)
-    throw new Error('Erro ao buscar planilha: ' + pErr.message)
-  }
-
-  // Buscar entradas manuais
-  const { data: entries, error: mErr } = await supabase
-    .from('manual_entries')
-    .select('codigo,qty')
-    .eq('count_id', count_id)
-  if (mErr) {
-    console.error('Erro ao buscar entradas:', mErr)
-    throw new Error('Erro ao buscar entradas: ' + mErr.message)
-  }
-
-  // Agregação de quantidades por código (soma múltiplas entradas do mesmo código)
-  const manualMap = new Map<string, number>()
-  for (const e of entries || []) {
-    const qty = Math.max(0, Number(e.qty) || 0) // Valida e converte
-    manualMap.set(e.codigo, (manualMap.get(e.codigo) || 0) + qty)
-  }
-
-  const planMap = new Map<string, { nome: string; saldo: number }>()
-  for (const p of plan || []) {
-    planMap.set(p.codigo, { nome: p.nome, saldo: p.saldo })
-  }
-
-  const results: any[] = []
-
-  // 1) Processar todos os itens do plano (nenhum ignorado)
-  // Lógica: REGULAR (diferença=0), FALTA (encontrou menos), EXCESSO (encontrou mais)
-  for (const [codigo, { nome, saldo }] of planMap.entries()) {
-    const manualQty = manualMap.get(codigo) || 0
-    const diferenca = saldo - manualQty // diferença: esperado - encontrado
-    
-    let status: 'regular' | 'falta' | 'excesso'
-    
-    if (diferenca === 0) {
-      status = 'regular'
-    } else if (diferenca > 0) {
-      status = 'falta' // Encontrou menos = falta
-    } else {
-      status = 'excesso' // Encontrou mais = excesso
-    }
-    
-    results.push({
-      count_id,
-      codigo,
-      status,
-      manual_qtd: manualQty,
-      saldo_qtd: saldo,
-      nome_produto: nome
-      // NÃO incluir 'diferenca' - coluna não existe na tabela
-    })
-  }
-
-  // 2) Itens com excesso de código (produtos não no plano)
-  for (const [codigo, qty] of manualMap.entries()) {
-    if (!planMap.has(codigo)) {
-      results.push({
-        count_id,
-        codigo,
-        status: 'excesso',
-        manual_qtd: qty,
-        saldo_qtd: 0,
-        nome_produto: ''
-        // NÃO incluir 'diferenca' - coluna não existe na tabela
-      })
-    }
-  }
-
-  // Limpar resultados anteriores e inserir novos
-  const { error: delErr } = await supabase.from('results').delete().eq('count_id', count_id)
-  if (delErr) {
-    console.error('Erro ao deletar resultados antigos:', delErr)
-    throw new Error('Erro ao limpar resultados anteriores: ' + delErr.message)
-  }
-  
-  // Inserir novos resultados se houver
-  if (results.length > 0) {
-    const { error: rErr } = await supabase.from('results').insert(results)
-    if (rErr) {
-      console.error('Erro ao inserir resultados:', rErr)
-      throw new Error('Erro ao salvar resultados: ' + rErr.message)
-    }
-  }
-  
-  console.log(`✓ Contagem finalizada com sucesso: ${results.length} resultados`)
-  
-  // Marcar contagem como finalizada
-  const { error: updateErr } = await supabase
-    .from('counts')
-    .update({ status: 'finalizada' })
-    .eq('id', count_id)
-  
-  if (updateErr) {
-    console.error('Erro ao marcar contagem como finalizada:', updateErr)
-    throw new Error('Erro ao atualizar status de finalização: ' + updateErr.message)
-  }
-  
-  return results
+  const summary = (Array.isArray(data) ? data[0] : data) as CountResultSummary | undefined
+  return summary ?? { regular: 0, falta: 0, excesso: 0, total: 0 }
 }
 
 export async function getResultsByCount(count_id: string) {
-  const { data, error } = await supabase.from('results').select('*').eq('count_id', count_id)
-  if (error) throw error
-  return data as Result[]
+  return await fetchAllByCount<Result>('results', '*', count_id)
 }
 
 export async function reopenCount(count_id: string) {
