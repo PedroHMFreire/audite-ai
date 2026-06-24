@@ -1,5 +1,8 @@
 # Dependencies
 node_modules/
+# Lockfile fora do versionamento: evita travar binários específicos de
+# plataforma (ex.: rollup linux/glibc) e quebrar o deploy no Render.
+package-lock.json
 
 # Build output
 dist/

@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { InputValidator, SecurityLogger } from './security'
+import { enqueueEntry } from './offlineQueue'
 
 export type CountStatus = 'em_andamento' | 'finalizada' | 'reaberta' | 'reavertida' | 'arquivada'
 export type Count = { id: string; user_id: string; store_id: string | null; nome: string; status: CountStatus | string | null; created_at: string }
@@ -287,14 +288,10 @@ export async function addManualEntry(count_id: string, codigo: string, qty: numb
     throw new Error(`Quantidade inválida: deve ser um número inteiro positivo (máx 999999)`)
   }
   
-  // Upsert incremental no banco: 1 linha por (count_id, codigo), somando qty.
-  // Evita inflar a tabela com uma linha por scan e mantém o total correto.
-  const { error } = await supabase.rpc('add_manual_entry', {
-    p_count_id: count_id,
-    p_codigo: sanitizedCodigo,
-    p_qty: Math.max(1, qty)
-  })
-  if (error) throw error
+  // Upsert incremental no banco (1 linha por código, somando qty), porém
+  // resiliente a falta de rede: a fila offline envia agora se houver conexão,
+  // ou guarda em IndexedDB e sincroniza ao reconectar. Nunca perde a leitura.
+  await enqueueEntry(count_id, sanitizedCodigo, Math.max(1, qty))
 }
 
 export async function listManualEntries(count_id: string) {
@@ -330,6 +327,41 @@ export async function updateManualEntry(id: string, changes: { codigo?: string; 
     cleanUpdates.qty = changes.qty
   }
 
+  // Se o código está mudando, pode colidir com outra linha do mesmo código
+  // (há UNIQUE(count_id, codigo)). Nesse caso, mesclamos as quantidades em vez
+  // de quebrar com erro de constraint.
+  if (cleanUpdates.codigo !== undefined) {
+    const { data: current, error: curErr } = await supabase
+      .from('manual_entries')
+      .select('count_id,codigo,qty')
+      .eq('id', id)
+      .single()
+    if (curErr) throw curErr
+
+    if (current && cleanUpdates.codigo !== current.codigo) {
+      const { data: existing } = await supabase
+        .from('manual_entries')
+        .select('id,qty')
+        .eq('count_id', current.count_id)
+        .eq('codigo', cleanUpdates.codigo)
+        .neq('id', id)
+        .maybeSingle()
+
+      if (existing) {
+        // Mesclar: soma a quantidade no registro de destino e remove este.
+        const mergedQty = (existing.qty || 0) + (cleanUpdates.qty ?? current.qty ?? 0)
+        const { error: upErr } = await supabase
+          .from('manual_entries')
+          .update({ qty: mergedQty })
+          .eq('id', existing.id)
+        if (upErr) throw upErr
+        const { error: delErr } = await supabase.from('manual_entries').delete().eq('id', id)
+        if (delErr) throw delErr
+        return
+      }
+    }
+  }
+
   const { error } = await supabase.from('manual_entries').update(cleanUpdates).eq('id', id)
   if (error) throw error
 }
@@ -341,6 +373,27 @@ export async function deleteManualEntry(id: string) {
   }
 
   const { error } = await supabase.from('manual_entries').delete().eq('id', id)
+  if (error) throw error
+}
+
+/**
+ * Define a quantidade de um código (set, não incrementa) por (count_id, codigo).
+ * Independente do id — útil para "desfazer" e ajustes. qty <= 0 remove o código.
+ */
+export async function setManualEntryQty(count_id: string, codigo: string, qty: number) {
+  const sanitized = InputValidator.sanitizeText(codigo.trim())
+  if (qty <= 0) {
+    const { error } = await supabase
+      .from('manual_entries')
+      .delete()
+      .eq('count_id', count_id)
+      .eq('codigo', sanitized)
+    if (error) throw error
+    return
+  }
+  const { error } = await supabase
+    .from('manual_entries')
+    .upsert({ count_id, codigo: sanitized, qty }, { onConflict: 'count_id,codigo' })
   if (error) throw error
 }
 
