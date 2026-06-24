@@ -52,13 +52,14 @@ export default function ManualEntry({
         <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
       </div>
 
-      <form onSubmit={submit} className="flex items-stretch gap-2">
+      <form onSubmit={submit} className="space-y-2">
+        {/* Código: largura total — é o campo principal */}
         <input
           ref={inputRef}
           value={code}
           onChange={e => setCode(e.target.value)}
           placeholder="Código do produto"
-          className="input flex-1 min-h-12 font-mono"
+          className="input w-full min-h-12 font-mono text-base"
           autoCapitalize="off"
           autoCorrect="off"
           autoComplete="off"
@@ -66,22 +67,23 @@ export default function ManualEntry({
           enterKeyHint="done"
           aria-label="Código do produto"
         />
-        <input
-          value={qty}
-          onChange={e => {
-            const value = e.target.value
-            if (value === '') return setQty('')
-            const n = Number(value)
-            if (Number.isFinite(n)) setQty(Math.max(1, n))
-          }}
-          placeholder="Qtd"
-          inputMode="numeric"
-          className="input w-16 min-h-12 text-center"
-          aria-label="Quantidade"
-        />
-        <button className="btn min-h-12 px-5" type="submit" aria-label="Adicionar item">
-          +
-        </button>
+        {/* Quantidade compacta + botão Adicionar */}
+        <div className="flex items-stretch gap-2">
+          <input
+            value={qty}
+            onChange={e => {
+              const value = e.target.value
+              if (value === '') return setQty('')
+              const n = Number(value)
+              if (Number.isFinite(n)) setQty(Math.max(1, n))
+            }}
+            placeholder="Qtd"
+            inputMode="numeric"
+            className="input w-20 min-h-12 text-center flex-shrink-0"
+            aria-label="Quantidade"
+          />
+          <button className="btn flex-1 min-h-12" type="submit">Adicionar</button>
+        </div>
       </form>
     </div>
   )
