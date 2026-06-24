@@ -68,7 +68,7 @@ export default function Header() {
   return (
     <>
       <header className="sticky top-0 z-50 bg-white/75 dark:bg-zinc-950/75 backdrop-blur border-b border-zinc-100 dark:border-zinc-900" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 md:px-8 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link to="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity" onClick={handleMobileNavClick}>
               <Logo />
@@ -179,7 +179,7 @@ export default function Header() {
       {authed && loc.pathname !== '/login' && mobileMenuOpen && (
         <div className="sm:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setMobileMenuOpen(false)}>
           <nav className="absolute top-14 left-0 right-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shadow-lg">
-            <div className="max-w-3xl mx-auto px-4 py-4 space-y-3">
+            <div className="max-w-7xl mx-auto px-4 py-4 space-y-3">
               <Link 
                 to="/dashboard" 
                 onClick={handleMobileNavClick}

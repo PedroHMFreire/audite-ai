@@ -309,6 +309,10 @@ export default function CountDetail() {
         </div>
       )}
 
+      {/* Corpo em 2 colunas no desktop */}
+      <div className="space-y-5 lg:space-y-0 lg:grid lg:grid-cols-5 lg:gap-6 lg:items-start">
+      {/* Coluna esquerda: progresso, planilha, cobertura */}
+      <div className="space-y-5 lg:col-span-2">
       {/* Progresso */}
       {plan.length > 0 && (
         <div className="card space-y-3">
@@ -344,6 +348,16 @@ export default function CountDetail() {
         </details>
       )}
 
+      <CoverageProgressBar
+        planCodes={totals.planCodes}
+        insertedCodes={totals.insertedCodes}
+        planItems={totals.planItems}
+        insertedItems={totals.insertedItems}
+      />
+      </div>{/* fim coluna esquerda */}
+
+      {/* Coluna direita: o que falta e itens contados */}
+      <div className="space-y-5 lg:col-span-3">
       {/* Não contados (o que falta caçar) */}
       {isEditable && stats.naoContado > 0 && (
         <div className="card">
@@ -414,17 +428,13 @@ export default function CountDetail() {
         </ul>
       </div>
 
-      <CoverageProgressBar
-        planCodes={totals.planCodes}
-        insertedCodes={totals.insertedCodes}
-        planItems={totals.planItems}
-        insertedItems={totals.insertedItems}
-      />
+      </div>{/* fim coluna direita */}
+      </div>{/* fim grid 2 colunas */}
 
       {/* Barra fixa de ação (no alcance do polegar) */}
       {isEditable && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="container-safe space-y-2.5">
+          <div className="max-w-2xl mx-auto space-y-2.5">
             <ManualEntry onAdd={onAdd} onScan={() => setShowScanner(true)} />
             <div className="flex gap-2">
               <button
