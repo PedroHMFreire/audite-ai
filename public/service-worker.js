@@ -1,7 +1,20 @@
-const CACHE_NAME = 'audite-ai-v1';
-const SKIP_WAITING = true;
+// Service Worker — estratégia de cache à prova de deploy.
+//
+// Lições do bug de 2026-06-24: a versão anterior usava cache-first no
+// index.html + nome de cache fixo, então TODO deploy ficava invisível para
+// quem já tinha aberto o app (servia o bundle antigo para sempre).
+//
+// Agora:
+//  - HTML / navegações: NETWORK-FIRST (sempre busca o index novo, que aponta
+//    para os JS/CSS novos). Fallback ao cache só quando offline.
+//  - Assets com hash (immutáveis): cache-first (seguro — o hash muda a cada build).
+//  - Supabase/API: NÃO intercepta (evita servir dados velhos).
+//  - CACHE_NAME versionado: o activate apaga os caches antigos.
 
-const STATIC_ASSETS = [
+const CACHE_NAME = 'audite-ai-v2';
+const SHELL = '/index.html';
+
+const PRECACHE = [
   '/',
   '/index.html',
   '/manifest.json',
@@ -12,275 +25,138 @@ const STATIC_ASSETS = [
   '/icon-512-maskable.png'
 ];
 
-// Install event - cache static assets
 self.addEventListener('install', (event) => {
-  console.log('[ServiceWorker] Installing...');
-  
+  console.log('[ServiceWorker] Installing v2…');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('[ServiceWorker] Caching static assets');
-        return cache.addAll(STATIC_ASSETS).catch((err) => {
-          console.warn('[ServiceWorker] Failed to cache some assets:', err);
-          // Continue even if some assets fail (e.g., not on first load)
-          return Promise.resolve();
-        });
-      })
-      .then(() => {
-        if (SKIP_WAITING) self.skipWaiting();
-      })
+      .then((cache) => cache.addAll(PRECACHE).catch((err) => {
+        console.warn('[ServiceWorker] Pré-cache parcial:', err);
+      }))
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activate event - cleanup old caches
 self.addEventListener('activate', (event) => {
-  console.log('[ServiceWorker] Activating...');
-  
+  console.log('[ServiceWorker] Activating v2…');
   event.waitUntil(
     caches.keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames
-            .filter((name) => name !== CACHE_NAME && name.startsWith('audite-ai-'))
-            .map((name) => {
-              console.log('[ServiceWorker] Deleting old cache:', name);
-              return caches.delete(name);
-            })
-        );
-      })
+      .then((names) => Promise.all(
+        names.filter((n) => n !== CACHE_NAME).map((n) => {
+          console.log('[ServiceWorker] Apagando cache antigo:', n);
+          return caches.delete(n);
+        })
+      ))
       .then(() => self.clients.claim())
   );
 });
 
-// Fetch event - serve from cache, fallback to network
+function isHashedAsset(url) {
+  // Vite gera /assets/<nome>-<hash>.<ext> — imutável por hash.
+  return url.pathname.startsWith('/assets/');
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  if (request.method !== 'GET') return;
+
   const url = new URL(request.url);
 
-  // Skip non-GET requests
-  if (request.method !== 'GET') {
+  // Supabase / API: deixa passar direto (sem cache → nunca dado velho).
+  if (url.origin === 'https://rwbomcidvezohsgojbgz.supabase.co' || url.pathname.includes('/api/')) {
     return;
   }
 
-  // Skip API requests (network-first strategy)
-  if (url.origin === 'https://rwbomcidvezohsgojbgz.supabase.co' || url.pathname.includes('/api/')) {
+  // Navegações (HTML do SPA): NETWORK-FIRST.
+  const isNavigation = request.mode === 'navigate' ||
+    (request.headers.get('accept') || '').includes('text/html');
+
+  if (isNavigation) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache successful responses
-          if (response && response.status === 200) {
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache);
-            });
-          }
+          // Se o servidor 404 numa rota do SPA, serve o index em cache.
+          if (!response.ok) throw new Error('nav not ok: ' + response.status);
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(SHELL, copy));
           return response;
         })
-        .catch(() => {
-          // Return offline fallback or cached response
-          return caches.match(request)
-            .then((cachedResponse) => cachedResponse || createOfflineFallback());
-        })
+        .catch(() => caches.match(SHELL).then((r) => r || caches.match('/') ).then((r) => r || createOfflineFallback()))
     );
     return;
   }
 
-  // Static assets - cache-first strategy
-  event.respondWith(
-    caches.match(request)
-      .then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
+  // Assets com hash: cache-first (atualiza em background se faltar).
+  if (isHashedAsset(url)) {
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(request, copy));
         }
-
-        return fetch(request)
-          .then((response) => {
-            // Cache successful responses
-            if (response && response.status === 200 && response.type !== 'error') {
-              const responseToCache = response.clone();
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(request, responseToCache);
-              });
-            }
-            return response;
-          })
-          .catch((error) => {
-            console.warn('[ServiceWorker] Fetch failed:', request.url, error);
-            // Return offline fallback
-            return createOfflineFallback();
-          });
-      })
-  );
-});
-
-// Offline fallback response
-function createOfflineFallback() {
-  return new Response(
-    `<!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Audite.AI - Offline</title>
-      <style>
-        body {
-          margin: 0;
-          padding: 20px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          background: linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%);
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .container {
-          background: white;
-          border-radius: 12px;
-          padding: 40px 20px;
-          text-align: center;
-          max-width: 400px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        h1 {
-          color: #1f2937;
-          margin: 0 0 10px 0;
-          font-size: 24px;
-        }
-        p {
-          color: #6b7280;
-          line-height: 1.6;
-          margin: 20px 0;
-        }
-        .icon {
-          font-size: 48px;
-          margin-bottom: 20px;
-        }
-        .offline-badge {
-          display: inline-block;
-          background: #fca5a5;
-          color: #7f1d1d;
-          padding: 8px 16px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 600;
-          margin-bottom: 20px;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="offline-badge">🔴 OFFLINE</div>
-        <div class="icon">📡</div>
-        <h1>Sem conexão</h1>
-        <p>Parece que você perdeu a conexão com a internet.</p>
-        <p style="font-size: 13px; color: #9ca3af;">
-          Dados em cache podem estar disponíveis quando você voltar online.
-        </p>
-      </div>
-    </body>
-    </html>`,
-    {
-      status: 503,
-      statusText: 'Service Unavailable',
-      headers: {
-        'Content-Type': 'text/html; charset=UTF-8'
-      }
-    }
-  );
-}
-
-// Handle background sync (optional - for queuing actions when offline)
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-counts') {
-    event.waitUntil(
-      // Sync pending counts here
-      Promise.resolve()
+        return response;
+      }))
     );
+    return;
   }
-});
 
-// =============================================
-// NOTIFICATION HANDLERS
-// =============================================
-
-// Handle notification click
-self.addEventListener('notificationclick', (event) => {
-  console.log('[ServiceWorker] Notification clicked:', event.notification.tag);
-  
-  event.notification.close();
-  
-  const data = event.notification.data;
-  let urlToOpen = '/';
-  
-  // Navegar baseado na ação e dados
-  if (event.action === 'open-audit' && data.scheduleItemId) {
-    urlToOpen = `/counts?audit=${data.scheduleItemId}`;
-  } else if (data.scheduleItemId) {
-    urlToOpen = `/counts?audit=${data.scheduleItemId}`;
-  }
-  
-  event.waitUntil(
-    clients.matchAll({
-      type: 'window',
-      includeUncontrolled: true
-    }).then((clientList) => {
-      // Procurar por aba já aberta
-      for (let i = 0; i < clientList.length; i++) {
-        const client = clientList[i];
-        if (client.url === urlToOpen && 'focus' in client) {
-          return client.focus();
+  // Demais GETs (ícones, manifest, etc.): stale-while-revalidate.
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      const network = fetch(request).then((response) => {
+        if (response && response.status === 200 && response.type !== 'error') {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(request, copy));
         }
-      }
-      
-      // Abrir nova aba se não encontrar
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
-      }
+        return response;
+      }).catch(() => cached || createOfflineFallback());
+      return cached || network;
     })
   );
 });
 
-// Handle notification close (para analytics)
-self.addEventListener('notificationclose', (event) => {
-  console.log('[ServiceWorker] Notification closed:', event.notification.tag);
-  
-  const data = event.notification.data;
-  
-  // Enviar analytics de fechamento
-  if (data.scheduleItemId && clients) {
-    clients.matchAll().then((clientList) => {
-      clientList.forEach((client) => {
-        client.postMessage({
-          type: 'NOTIFICATION_CLOSED',
-          scheduleItemId: data.scheduleItemId
-        });
-      });
-    });
-  }
+function createOfflineFallback() {
+  return new Response(
+    `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Auditê - Offline</title>
+      <style>body{margin:0;padding:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#FF6B35;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{background:#fff;border-radius:16px;padding:40px 20px;text-align:center;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25)}h1{color:#1f2937;margin:0 0 10px;font-size:22px}p{color:#6b7280;line-height:1.6}.b{display:inline-block;background:#fde68a;color:#92400e;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;margin-bottom:16px}</style>
+      </head><body><div class="c"><div class="b">🔴 OFFLINE</div><div style="font-size:48px;margin-bottom:16px">📡</div>
+      <h1>Sem conexão</h1><p>Você está offline. As contagens feitas agora são salvas no aparelho e sincronizam quando a conexão voltar.</p>
+      </div></body></html>`,
+    { status: 503, statusText: 'Service Unavailable', headers: { 'Content-Type': 'text/html; charset=UTF-8' } }
+  );
+}
+
+// =============================================
+// NOTIFICATION HANDLERS
+// =============================================
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  let urlToOpen = '/';
+  if (data.scheduleItemId) urlToOpen = `/counts?audit=${data.scheduleItemId}`;
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url === urlToOpen && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(urlToOpen);
+    })
+  );
 });
 
-// Handle push notifications (para future use)
 self.addEventListener('push', (event) => {
-  console.log('[ServiceWorker] Push notification received');
-  
-  if (event.data) {
-    const notificationData = event.data.json();
-    
-    const options = {
-      body: notificationData.body || notificationData.message,
+  if (!event.data) return;
+  const n = event.data.json();
+  event.waitUntil(
+    self.registration.showNotification(n.title || 'Auditê', {
+      body: n.body || n.message,
       icon: '/icon-192.png',
-      badge: '/icon-96.png',
-      tag: notificationData.tag || 'audite-notification',
-      data: notificationData.data
-    };
-    
-    event.waitUntil(
-      self.registration.showNotification(
-        notificationData.title || 'AUDITE.AI',
-        options
-      )
-    );
-  }
+      badge: '/icon-192.png',
+      tag: n.tag || 'audite-notification',
+      data: n.data
+    })
+  );
 });
 
-console.log('[ServiceWorker] Loaded');
+console.log('[ServiceWorker] Loaded v2');
