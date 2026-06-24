@@ -18,6 +18,7 @@ import {
 } from '@/lib/db'
 import { feedbackSuccess, feedbackWarning, feedbackNeutral, feedbackError } from '@/lib/feedback'
 import { onPendingChange, flushQueue, pendingCountFor } from '@/lib/offlineQueue'
+import { InputValidator } from '@/lib/security'
 
 // Carregado sob demanda: a lib de leitura (ZXing) só baixa ao abrir o scanner.
 const BarcodeScanner = lazy(() => import('@/components/BarcodeScanner'))
@@ -50,7 +51,7 @@ export default function CountDetail() {
   const planCodes = useMemo(() => new Set(plan.map(p => p.codigo)), [plan])
 
   useEffect(() => {
-    if (!id || !isValidUUID(id)) {
+    if (!id || !InputValidator.uuid(id)) {
       addToast({ type: 'error', message: 'ID da contagem invalido' })
       nav('/contagens')
       return
@@ -540,8 +541,4 @@ function SyncStatus({ countId }: { countId: string }) {
     return <span className="inline-flex items-center gap-1.5 text-xs text-primary-500"><span className="h-2 w-2 rounded-full bg-primary-500 animate-pulse" />Sincronizando {pending}…</span>
   }
   return <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tudo salvo</span>
-}
-
-function isValidUUID(uuid: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(uuid)
 }
