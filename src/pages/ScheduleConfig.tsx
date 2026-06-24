@@ -27,6 +27,7 @@ const WEEKDAYS = [
   { num: 7, short: 'Dom', full: 'Domingo' }
 ]
 const dayFull = (n: number) => WEEKDAYS.find(d => d.num === n)?.full ?? ''
+const dayShort = (n: number) => WEEKDAYS.find(d => d.num === n)?.short ?? ''
 
 export default function ScheduleConfig() {
   const { addToast } = useToast()
@@ -36,6 +37,7 @@ export default function ScheduleConfig() {
   const [generating, setGenerating] = useState(false)
   const [calendarRefresh, setCalendarRefresh] = useState(0)
 
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingConfig, setEditingConfig] = useState<ScheduleConfig | null>(null)
   const [deletingConfig, setDeletingConfig] = useState<ScheduleConfig | null>(null)
   const [regenConfig, setRegenConfig] = useState<ScheduleConfig | null>(null)
@@ -122,6 +124,7 @@ export default function ScheduleConfig() {
       addToast({ type: 'success', message: 'Cronograma gerado!', description: `${formData.total_weeks} semanas programadas` })
       setFormData(prev => ({ name: '', description: '', sectors_per_week: 4, start_date: prev.start_date, total_weeks: 4, work_days: [1, 2, 3, 4, 5] }))
       setSelectedTemplate(null)
+      setShowCreateForm(false)
       await loadData()
       setCalendarRefresh(p => p + 1)
     } catch (err) {
@@ -183,25 +186,70 @@ export default function ScheduleConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho */}
-      <div>
-        <h1 className="text-xl font-semibold">Cronograma de contagens</h1>
-        <p className="text-sm text-muted">Distribua suas categorias em contagens cíclicas ao longo das semanas.</p>
+      {/* Cabeçalho + ação */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Cronograma de contagens</h1>
+          <p className="text-sm text-muted">Acompanhe o ciclo e gere um novo cronograma quando precisar.</p>
+        </div>
+        <button className="btn flex-shrink-0 min-h-11" onClick={() => setShowCreateForm(true)}>+ Novo cronograma</button>
       </div>
 
-      {/* Layout principal: criar (esq) + existentes (dir) no desktop */}
-      <div className="grid gap-6 lg:grid-cols-5 lg:items-start">
-        {/* Criar cronograma */}
-        <div className="lg:col-span-2">
-          <form onSubmit={handleCreateAndGenerate} className="card space-y-4">
+      {/* Dashboard / análises — destaque */}
+      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
+        <div className="lg:col-span-2"><SchedulePredictiveWidget /></div>
+        <AnomalyAlerts />
+      </div>
+
+      {/* Calendário — visão principal */}
+      <ScheduleCalendar refreshTrigger={calendarRefresh} />
+
+      {/* Cronogramas (gestão) — recolhido, pois é ocasional */}
+      {configs.length > 0 && (
+        <details className="card">
+          <summary className="cursor-pointer text-sm font-semibold select-none">
+            Cronogramas <span className="text-muted">({configs.length})</span>
+          </summary>
+          <div className="mt-3 space-y-3">
+            {configs.map(config => (
+              <div key={config.id} className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-medium truncate">{config.name}</h4>
+                      {config.is_active && <span className="badge badge-success">Ativo</span>}
+                    </div>
+                    <div className="text-sm text-muted mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                      <span>{config.sectors_per_week}/semana · {config.total_weeks} sem.</span>
+                      <span>{new Date(config.start_date).toLocaleDateString()}{config.end_date && ` – ${new Date(config.end_date).toLocaleDateString()}`}</span>
+                      <span>{config.work_days.map(dayShort).join(', ')}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button className="rounded-lg px-3 min-h-9 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" onClick={() => setRegenConfig(config)} disabled={generating}>Regenerar</button>
+                    <button className="rounded-lg px-3 min-h-9 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" onClick={() => setEditingConfig(config)}>Editar</button>
+                    <button className="rounded-lg px-3 min-h-9 text-sm text-danger hover:bg-danger/10 transition" onClick={() => setDeletingConfig(config)}>Excluir</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* Modal: criar cronograma */}
+      {showCreateForm && (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 overflow-y-auto" onClick={() => setShowCreateForm(false)}>
+          <form onSubmit={handleCreateAndGenerate} onClick={e => e.stopPropagation()}
+            className="card w-full max-w-lg my-8 max-h-[90vh] overflow-y-auto space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Novo cronograma</h3>
-              {selectedTemplate && <span className="badge badge-primary">{selectedTemplate.name}</span>}
+              <button type="button" onClick={() => setShowCreateForm(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg leading-none">✕</button>
             </div>
 
             <div>
               <label className="block text-sm font-medium mb-1">Nome</label>
-              <input className="input" value={formData.name} placeholder="Ex.: Cronograma Junho"
+              <input className="input" value={formData.name} placeholder="Ex.: Cronograma Junho" autoFocus
                 onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} required />
             </div>
 
@@ -233,15 +281,12 @@ export default function ScheduleConfig() {
                     <button key={num} type="button" onClick={() => toggleWorkDay(num)}
                       className={`min-w-11 min-h-10 px-2 rounded-lg text-sm font-medium transition-colors ${
                         on ? 'bg-primary-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                      }`}>
-                      {short}
-                    </button>
+                      }`}>{short}</button>
                   )
                 })}
               </div>
             </div>
 
-            {/* Resumo inline (substitui o "preview" pesado) */}
             <p className="text-sm text-muted border-t border-zinc-100 dark:border-zinc-800 pt-3">
               <span className="text-zinc-900 dark:text-white font-medium">{totalCounts}</span> contagens
               <span className="mx-1">·</span>{formData.sectors_per_week}/semana × {formData.total_weeks} sem.
@@ -264,60 +309,11 @@ export default function ScheduleConfig() {
             )}
           </form>
         </div>
+      )}
 
-        {/* Cronogramas existentes */}
-        <div className="lg:col-span-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Cronogramas</h3>
-            {categories.length > 0 && (
-              <span className="text-xs text-muted">{categories.length} categoria{categories.length !== 1 ? 's' : ''} disponíveis</span>
-            )}
-          </div>
-
-          {configs.length === 0 ? (
-            <div className="card text-center py-10 text-sm text-muted">
-              Nenhum cronograma ainda. Crie o primeiro ao lado.
-            </div>
-          ) : (
-            configs.map(config => (
-              <div key={config.id} className="card">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-medium truncate">{config.name}</h4>
-                      {config.is_active && <span className="badge badge-success">Ativo</span>}
-                    </div>
-                    {config.description && <p className="text-sm text-muted mt-1">{config.description}</p>}
-                    <div className="text-sm text-muted mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                      <span>{config.sectors_per_week}/semana · {config.total_weeks} sem.</span>
-                      <span>{new Date(config.start_date).toLocaleDateString()}{config.end_date && ` – ${new Date(config.end_date).toLocaleDateString()}`}</span>
-                      <span>{config.work_days.map(d => WEEKDAYS.find(w => w.num === d)?.short).join(', ')}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button className="rounded-lg px-3 min-h-9 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" onClick={() => setRegenConfig(config)} disabled={generating} title="Regenerar">Regenerar</button>
-                    <button className="rounded-lg px-3 min-h-9 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" onClick={() => setEditingConfig(config)} title="Editar">Editar</button>
-                    <button className="rounded-lg px-3 min-h-9 text-sm text-danger hover:bg-danger/10 transition" onClick={() => setDeletingConfig(config)} title="Excluir">Excluir</button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Calendário */}
-      <ScheduleCalendar refreshTrigger={calendarRefresh} />
-
-      {/* Análises (secundário) */}
-      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
-        <div className="lg:col-span-2"><SchedulePredictiveWidget /></div>
-        <AnomalyAlerts />
-      </div>
-
-      {/* Modal: seletor de template */}
+      {/* Modal: seletor de template (acima do form) */}
       {showTemplateSelector && (
-        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 overflow-y-auto" onClick={() => setShowTemplateSelector(false)}>
+        <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 overflow-y-auto" onClick={() => setShowTemplateSelector(false)}>
           <div className="card w-full max-w-2xl my-8" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold">Escolher um modelo</h3>
