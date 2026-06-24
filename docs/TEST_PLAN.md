@@ -9,6 +9,7 @@ Objetivo: deixar a operação 100%. Marque cada item ao validar. Prioridades:
 ---
 
 ## 🔥 Smoke test (5 min — caminho crítico)
+- [ ] **Abrir uma contagem EXISTENTE em andamento → abre sem erro** (regressão do bug de UUID corrigido em 2026-06-24).
 - [ ] Criar contagem nova de teste.
 - [ ] Subir planilha pequena: `A=10`, `B=5`, `C=8`.
 - [ ] Contar (scan ou manual): `A`×10, `B`×3, e um código `D` fora do plano ×2.
@@ -19,6 +20,11 @@ Objetivo: deixar a operação 100%. Marque cada item ao validar. Prioridades:
 ---
 
 ## P0 — Crítico
+
+### 0. Navegação e validações de front (regressão)
+- [ ] Abrir contagem existente (em andamento / finalizada / reaberta) — sem "ID inválido".
+- [ ] Abrir relatório de contagem existente — sem erro de ID.
+- [ ] URL com id malformado → redireciona com mensagem clara (não quebra a tela).
 
 ### 1. Cruzamento / matemática
 - [ ] Regular/Falta/Excesso conforme tabela do smoke.
