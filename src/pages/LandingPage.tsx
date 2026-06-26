@@ -226,7 +226,7 @@ function ProductMockup() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <div className="text-zinc-400 text-xs">Relatório de contagem</div>
-                <div className="text-white font-bold text-sm" style={{ fontFamily: "'Syne', sans-serif" }}>
+                <div className="text-white font-bold text-sm" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                   Hoje · 14h32
                 </div>
               </div>
@@ -328,7 +328,7 @@ function ProductMockup() {
         style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}
       >
         <div className="text-xs text-zinc-400 font-medium">Divergência</div>
-        <div className="text-sm font-bold text-orange-600" style={{ fontFamily: "'Syne', sans-serif" }}>
+        <div className="text-sm font-bold text-orange-600" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
           −3 unid.
         </div>
       </div>
@@ -337,7 +337,7 @@ function ProductMockup() {
         style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}
       >
         <div className="text-xs text-zinc-400 font-medium">Economia</div>
-        <div className="text-sm font-bold text-green-600" style={{ fontFamily: "'Syne', sans-serif" }}>
+        <div className="text-sm font-bold text-green-600" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
           R$ 2.4k
         </div>
       </div>
@@ -353,7 +353,7 @@ export default function LandingPage() {
   useEffect(() => {
     const link = document.createElement('link')
     link.href =
-      'https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap'
+      'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap'
     link.rel = 'stylesheet'
     document.head.appendChild(link)
     return () => {
@@ -365,7 +365,7 @@ export default function LandingPage() {
     navigate(`/trial-signup?plan=${encodeURIComponent(planName)}`)
   }
 
-  const syne: React.CSSProperties = { fontFamily: "'Syne', sans-serif" }
+  const syne: React.CSSProperties = { fontFamily: "'Plus Jakarta Sans', sans-serif" }
   const dmSans: React.CSSProperties = { fontFamily: "'DM Sans', sans-serif" }
 
   return (
