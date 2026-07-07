@@ -145,14 +145,16 @@ export async function uploadCatalog(
   items: { codigo: string; nome: string }[],
   onProgress?: (done: number, total: number) => void
 ): Promise<number> {
+  // Remove duplicatas pelo código (mantém a última ocorrência)
+  const deduped = [...new Map(items.map(item => [item.codigo, item])).values()]
   const CHUNK = 500
   let inserted = 0
-  for (let i = 0; i < items.length; i += CHUNK) {
-    const chunk = items.slice(i, i + CHUNK)
+  for (let i = 0; i < deduped.length; i += CHUNK) {
+    const chunk = deduped.slice(i, i + CHUNK)
     const { data, error } = await supabase.rpc('bulk_upsert_catalog', { p_items: chunk })
     if (error) throw new Error(error.message)
     inserted += (data as number) || 0
-    onProgress?.(Math.min(i + CHUNK, items.length), items.length)
+    onProgress?.(Math.min(i + CHUNK, deduped.length), deduped.length)
   }
   return inserted
 }
