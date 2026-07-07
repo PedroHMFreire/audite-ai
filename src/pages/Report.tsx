@@ -153,15 +153,15 @@ export default function Report() {
 
       <div className="card">
         <div className="text-sm mb-3">Produtos regulares</div>
-        <SimpleTable rows={rows.filter(r=>r.status==='regular')} />
+        <SimpleTable rows={rows.filter(r=>r.status==='regular')} type="regular" />
       </div>
       <div className="card">
         <div className="text-sm mb-3">Produtos em excesso</div>
-        <SimpleTable rows={rows.filter(r=>r.status==='excesso')} />
+        <SimpleTable rows={rows.filter(r=>r.status==='excesso')} type="excesso" />
       </div>
       <div className="card">
         <div className="text-sm mb-3">Produtos em falta</div>
-        <SimpleTable rows={rows.filter(r=>r.status==='falta')} />
+        <SimpleTable rows={rows.filter(r=>r.status==='falta')} type="falta" />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2">
@@ -178,11 +178,44 @@ export default function Report() {
   )
 }
 
-function SimpleTable({ rows }: { rows: Result[] }) {
-  const getDifferenceClass = (diff: number) => {
-    if (diff > 0) return 'text-red-600 dark:text-red-400 font-medium'
-    if (diff < 0) return 'text-blue-600 dark:text-blue-400 font-medium'
-    return 'text-green-600 dark:text-green-400'
+function SimpleTable({ rows, type }: { rows: Result[]; type: 'regular' | 'falta' | 'excesso' }) {
+  // Diferença semântica por tipo de tabela:
+  // - falta:   saldo − encontrado  → positivo = quantas unidades faltam
+  // - excesso: encontrado − saldo  → positivo = quantas unidades sobram
+  // - regular: sempre 0
+  const calcDiff = (r: Result) => {
+    const manual = r.manual_qtd || 0
+    const saldo = r.saldo_qtd || 0
+    if (type === 'falta') return saldo - manual
+    if (type === 'excesso') return manual - saldo
+    return 0
+  }
+
+  const diffLabel = type === 'falta' ? 'Faltando' : type === 'excesso' ? 'Em excesso' : 'Diferença'
+  const diffTitle =
+    type === 'falta'
+      ? 'Unidades a menos que o saldo da planilha'
+      : type === 'excesso'
+      ? 'Unidades a mais que o saldo da planilha (ou código não cadastrado)'
+      : 'Quantidade bate com o saldo'
+
+  const diffClass = (diff: number) => {
+    if (diff === 0) return 'text-green-600 dark:text-green-400'
+    if (type === 'falta') return 'text-red-600 dark:text-red-400 font-bold'
+    return 'text-amber-600 dark:text-amber-400 font-bold'
+  }
+
+  const rowBg = (i: number) => {
+    const even = i % 2 === 0
+    if (type === 'regular') return even ? 'bg-green-50 dark:bg-green-950/20' : 'bg-white dark:bg-zinc-900'
+    if (type === 'falta') return even ? 'bg-red-50 dark:bg-red-950/20' : 'bg-red-50/50 dark:bg-red-950/10'
+    return even ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-amber-50/50 dark:bg-amber-950/10'
+  }
+
+  const mobileBg = () => {
+    if (type === 'regular') return 'bg-green-50 dark:bg-green-950/20'
+    if (type === 'falta') return 'bg-red-50 dark:bg-red-950/20'
+    return 'bg-amber-50 dark:bg-amber-950/20'
   }
 
   return (
@@ -199,43 +232,26 @@ function SimpleTable({ rows }: { rows: Result[] }) {
                 <span title="Nome ou descrição do produto">Nome</span>
               </th>
               <th className="py-3 px-4 font-semibold text-zinc-700 dark:text-zinc-300 text-right">
-                <span title="Quantidade registrada na planilha">Esperado</span>
+                <span title="Quantidade registrada na planilha (saldo esperado)">Esperado</span>
               </th>
               <th className="py-3 px-4 font-semibold text-zinc-700 dark:text-zinc-300 text-right">
-                <span title="Quantidade encontrada no estoque físico">Encontrado</span>
+                <span title="Quantidade encontrada fisicamente na loja">Encontrado</span>
               </th>
               <th className="py-3 px-4 font-semibold text-zinc-700 dark:text-zinc-300 text-right">
-                <span title="Diferença entre encontrado e esperado. Positivo=falta, Negativo=excesso">Diferença</span>
+                <span title={diffTitle}>{diffLabel}</span>
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {rows.map((r, i) => {
-              const diff = (r.manual_qtd || 0) - (r.saldo_qtd || 0)
-              const striped = i % 2 === 0
-              let rowStatusColor = ''
-              
-              if (r.status === 'regular') {
-                rowStatusColor = striped 
-                  ? 'bg-green-50 dark:bg-green-950/20' 
-                  : 'bg-white dark:bg-zinc-900'
-              } else if (r.status === 'falta') {
-                rowStatusColor = striped
-                  ? 'bg-red-50 dark:bg-red-950/20'
-                  : 'bg-red-50/50 dark:bg-red-950/10'
-              } else if (r.status === 'excesso') {
-                rowStatusColor = striped
-                  ? 'bg-blue-50 dark:bg-blue-950/20'
-                  : 'bg-blue-50/50 dark:bg-blue-950/10'
-              }
-              
+              const diff = calcDiff(r)
               return (
-                <tr key={i} className={`${rowStatusColor} hover:bg-opacity-75 transition-all border-none`}>
+                <tr key={i} className={`${rowBg(i)} transition-all border-none`}>
                   <td className="py-3 px-4 font-mono font-medium text-zinc-900 dark:text-white">
                     {r.codigo}
                   </td>
                   <td className="py-3 px-4 text-zinc-700 dark:text-zinc-300 max-w-xs truncate" title={r.nome_produto || undefined}>
-                    {r.nome_produto || '—'}
+                    {r.nome_produto || <span className="italic text-zinc-400">Não cadastrado</span>}
                   </td>
                   <td className="py-3 px-4 text-right text-zinc-700 dark:text-zinc-300 font-medium">
                     {r.saldo_qtd}
@@ -243,8 +259,8 @@ function SimpleTable({ rows }: { rows: Result[] }) {
                   <td className="py-3 px-4 text-right text-zinc-700 dark:text-zinc-300 font-medium">
                     {r.manual_qtd}
                   </td>
-                  <td className={`py-3 px-4 text-right font-bold ${getDifferenceClass(diff)}`}>
-                    {diff > 0 ? '+' : ''}{diff}
+                  <td className={`py-3 px-4 text-right ${diffClass(diff)}`}>
+                    {diff === 0 ? '✓' : `+${diff}`}
                   </td>
                 </tr>
               )
@@ -263,24 +279,14 @@ function SimpleTable({ rows }: { rows: Result[] }) {
       {/* Mobile: Cards */}
       <div className="sm:hidden space-y-2">
         {rows.map((r, i) => {
-          const diff = (r.manual_qtd || 0) - (r.saldo_qtd || 0)
-          let bgColor = 'bg-white dark:bg-zinc-900'
-          
-          if (r.status === 'regular') {
-            bgColor = 'bg-green-50 dark:bg-green-950/20'
-          } else if (r.status === 'falta') {
-            bgColor = 'bg-red-50 dark:bg-red-950/20'
-          } else if (r.status === 'excesso') {
-            bgColor = 'bg-blue-50 dark:bg-blue-950/20'
-          }
-          
+          const diff = calcDiff(r)
           return (
-            <div key={i} className={`${bgColor} p-4 rounded-lg border border-zinc-200 dark:border-zinc-800`}>
-              <div className="font-mono font-semibold text-zinc-900 dark:text-white mb-2">
+            <div key={i} className={`${mobileBg()} p-4 rounded-lg border border-zinc-200 dark:border-zinc-800`}>
+              <div className="font-mono font-semibold text-zinc-900 dark:text-white mb-1">
                 {r.codigo}
               </div>
               <div className="text-sm text-zinc-600 dark:text-zinc-400 mb-3 truncate" title={r.nome_produto || undefined}>
-                {r.nome_produto || '—'}
+                {r.nome_produto || <span className="italic text-zinc-400">Não cadastrado</span>}
               </div>
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
                 <div>
@@ -292,9 +298,9 @@ function SimpleTable({ rows }: { rows: Result[] }) {
                   <div className="font-semibold text-zinc-900 dark:text-white text-base">{r.manual_qtd}</div>
                 </div>
                 <div>
-                  <div className="text-zinc-500 dark:text-zinc-400 mb-1">Diferença</div>
-                  <div className={`font-bold text-base ${getDifferenceClass(diff)}`}>
-                    {diff > 0 ? '+' : ''}{diff}
+                  <div className="text-zinc-500 dark:text-zinc-400 mb-1">{diffLabel}</div>
+                  <div className={`font-bold text-base ${diffClass(diff)}`}>
+                    {diff === 0 ? '✓' : `+${diff}`}
                   </div>
                 </div>
               </div>

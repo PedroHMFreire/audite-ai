@@ -115,23 +115,30 @@ async function sendOne(entry: PendingEntry): Promise<boolean> {
   }
 }
 
-let flushing = false
+let activeFlush: Promise<void> | null = null
 
-/** Tenta drenar a fila. Para no primeiro erro (provável falta de rede). */
+/** Tenta drenar a fila. Se um flush já estiver em progresso, aguarda sua conclusão. */
 export async function flushQueue(): Promise<void> {
-  if (flushing) return
-  flushing = true
-  try {
-    const all = await getAll()
-    for (const entry of all) {
-      const ok = await sendOne(entry)
-      if (!ok) break // sem rede / erro: tenta de novo depois
-      await remove(entry.id)
-      await notify()
-    }
-  } finally {
-    flushing = false
+  if (activeFlush) {
+    // Aguarda o flush em andamento em vez de retornar silenciosamente.
+    // Isso garante que finalizar() só prossegue após todas as entradas serem enviadas.
+    await activeFlush
+    return
   }
+  activeFlush = (async () => {
+    try {
+      const all = await getAll()
+      for (const entry of all) {
+        const ok = await sendOne(entry)
+        if (!ok) break
+        await remove(entry.id)
+        await notify()
+      }
+    } finally {
+      activeFlush = null
+    }
+  })()
+  await activeFlush
 }
 
 /**

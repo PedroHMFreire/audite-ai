@@ -249,7 +249,20 @@ export default function CountDetail() {
     if (!id || !isEditable) return
     setIsProcessing(true)
     try {
-      await flushQueue() // garante que entradas offline foram enviadas
+      // Garante que entradas offline foram enviadas antes de computar
+      await flushQueue()
+
+      // Verifica se ainda restam entradas pendentes (ex: sem conexão)
+      const remaining = await pendingCountFor(id)
+      if (remaining > 0) {
+        addToast({
+          type: 'error',
+          message: 'Entradas não sincronizadas',
+          description: `${remaining} leitura(s) pendentes. Verifique a conexão e tente novamente.`
+        })
+        return
+      }
+
       const summary = await computeAndSaveResults(id)
       addToast({ type: 'success', message: 'Contagem finalizada!', description: `${summary.total} itens processados` })
       setCount(prev => prev ? { ...prev, status: 'finalizada' } : prev)
