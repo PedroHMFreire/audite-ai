@@ -18,6 +18,8 @@ import LandingPage from '@/pages/LandingPage'
 import TrialSignup from '@/pages/TrialSignup'
 import TrialWelcome from '@/pages/TrialWelcome'
 import NotificationPreferences from '@/pages/NotificationPreferences'
+import Organization from '@/pages/Organization'
+import AcceptInvitation from '@/pages/AcceptInvitation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { PERMISSIONS } from '@/lib/permissions'
@@ -46,6 +48,7 @@ export default function App() {
   
   // Check if current route is public (landing page routes)
   const isPublicRoute = ['/', '/trial-signup', '/trial-welcome'].includes(location.pathname)
+    || location.pathname.startsWith('/convite/')
   
   return (
     <ToastProvider>
@@ -73,6 +76,8 @@ export default function App() {
             <Route path="/calendario" element={<PrivateRoute><ScheduleCalendar /></PrivateRoute>} />
             <Route path="/notificacoes" element={<PrivateRoute><NotificationPreferences /></PrivateRoute>} />
             <Route path="/notifications" element={<Navigate to="/notificacoes" replace />} />
+            <Route path="/organizacao" element={<PrivateRoute><Organization /></PrivateRoute>} />
+            <Route path="/convite/:token" element={<AcceptInvitation />} />
             
             {/* Admin Routes - Protected */}
             <Route path="/admin" element={

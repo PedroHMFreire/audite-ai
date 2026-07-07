@@ -19,6 +19,7 @@ import {
 import { feedbackSuccess, feedbackWarning, feedbackNeutral, feedbackError } from '@/lib/feedback'
 import { onPendingChange, flushQueue, pendingCountFor } from '@/lib/offlineQueue'
 import { InputValidator } from '@/lib/security'
+import { getMyOrg, lookupProduct } from '@/lib/catalog'
 
 // Carregado sob demanda: a lib de leitura (ZXing) só baixa ao abrir o scanner.
 const BarcodeScanner = lazy(() => import('@/components/BarcodeScanner'))
@@ -44,6 +45,8 @@ export default function CountDetail() {
   const [removeTarget, setRemoveTarget] = useState<Entry | null>(null)
   const lastAddRef = useRef<{ codigo: string; qty: number } | null>(null)
   const reconcileTimer = useRef<number | null>(null)
+  const hasOrg = useRef<boolean>(false)
+  const catalogCache = useRef<Map<string, string | null>>(new Map())
 
   const isEditable = count?.status !== 'finalizada' && count?.status !== 'arquivada'
   const canViewReport = count?.status === 'finalizada'
@@ -60,6 +63,8 @@ export default function CountDetail() {
     ;(async () => {
       setLoading(true)
       setError(null)
+      // Verifica se o usuário tem organização (para validação do catálogo)
+      getMyOrg().then(ctx => { hasOrg.current = ctx !== null }).catch(() => {})
       try {
         const [countData, planData, entriesData] = await Promise.all([
           getCountById(id!),
@@ -120,7 +125,7 @@ export default function CountDetail() {
     }
     const codigo = codigoRaw.trim()
     if (!codigo) return
-    const known = planCodes.size === 0 || planCodes.has(codigo)
+    const inPlan = planCodes.size === 0 || planCodes.has(codigo)
 
     // Atualização otimista: a tela responde na hora, o banco sincroniza depois.
     let newTotal = qty
@@ -138,17 +143,35 @@ export default function CountDetail() {
     })
     lastAddRef.current = { codigo, qty }
 
-    if (known) feedbackSuccess()
+    if (inPlan) feedbackSuccess()
     else feedbackWarning()
 
     try {
       await addManualEntry(id, codigo, qty)
-      addToast({
-        type: known ? 'success' : 'warning',
-        message: known ? `${codigo}` : `${codigo} fora da planilha`,
-        description: known ? `Total contado: ${newTotal}` : 'Registrado como excesso',
-        duration: 1800
-      })
+
+      // Monta a mensagem do toast com base no plano e no catálogo
+      let toastType: 'success' | 'warning' | 'error' = inPlan ? 'success' : 'warning'
+      let toastMsg = codigo
+      let toastDesc = inPlan ? `Total contado: ${newTotal}` : 'Registrado como excesso'
+
+      if (!inPlan && hasOrg.current) {
+        // Consulta o catálogo (com cache para não repetir chamadas)
+        if (!catalogCache.current.has(codigo)) {
+          const found = await lookupProduct(codigo)
+          catalogCache.current.set(codigo, found?.nome ?? null)
+        }
+        const catalogNome = catalogCache.current.get(codigo)
+        if (catalogNome != null) {
+          toastMsg = catalogNome || codigo
+          toastDesc = `${codigo} · fora do plano desta contagem`
+          toastType = 'warning'
+        } else {
+          toastDesc = 'Código não encontrado no catálogo'
+          toastType = 'error'
+        }
+      }
+
+      addToast({ type: toastType, message: toastMsg, description: toastDesc, duration: 2200 })
       scheduleReconcile()
     } catch (err) {
       feedbackError()

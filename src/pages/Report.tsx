@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getCountById, getResultsByCount, getPlanItems, listManualEntries, getStoreById, reopenCount } from '@/lib/db'
 import type { Result } from '@/lib/db'
+import { getMyOrg, batchLookupProducts } from '@/lib/catalog'
 import { generateReportPDF } from '@/lib/pdf'
 import CoverageProgressBar from '@/components/CoverageProgressBar'
 
@@ -18,6 +19,7 @@ export default function Report() {
   const [storeName, setStoreName] = useState<string | null>(null)
   const [logoPng, setLogoPng] = useState<string | undefined>(undefined)
   const [reopening, setReopening] = useState(false)
+  const [catalogNames, setCatalogNames] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     if (!id) return
@@ -37,7 +39,20 @@ export default function Report() {
       }
     })()
     
-    getResultsByCount(id).then(setRows)
+    getResultsByCount(id).then(async results => {
+      setRows(results)
+      // Enriquece com nomes do catálogo para itens em excesso sem nome
+      const hasOrg = await getMyOrg().then(ctx => ctx !== null).catch(() => false)
+      if (hasOrg) {
+        const needsName = results
+          .filter(r => r.status === 'excesso' && !r.nome_produto)
+          .map(r => r.codigo)
+        if (needsName.length > 0) {
+          const names = await batchLookupProducts(needsName)
+          setCatalogNames(names)
+        }
+      }
+    })
     getPlanItems(id).then(setPlan)
     listManualEntries(id).then(setEntries)
 
@@ -157,7 +172,7 @@ export default function Report() {
       </div>
       <div className="card">
         <div className="text-sm mb-3">Produtos em excesso</div>
-        <SimpleTable rows={rows.filter(r=>r.status==='excesso')} type="excesso" />
+        <SimpleTable rows={rows.filter(r=>r.status==='excesso')} type="excesso" catalogNames={catalogNames} />
       </div>
       <div className="card">
         <div className="text-sm mb-3">Produtos em falta</div>
@@ -178,7 +193,8 @@ export default function Report() {
   )
 }
 
-function SimpleTable({ rows, type }: { rows: Result[]; type: 'regular' | 'falta' | 'excesso' }) {
+function SimpleTable({ rows, type, catalogNames = new Map() }: { rows: Result[]; type: 'regular' | 'falta' | 'excesso'; catalogNames?: Map<string, string> }) {
+  const getNome = (r: Result) => r.nome_produto || catalogNames.get(r.codigo) || ''
   // Diferença semântica por tipo de tabela:
   // - falta:   saldo − encontrado  → positivo = quantas unidades faltam
   // - excesso: encontrado − saldo  → positivo = quantas unidades sobram
@@ -250,8 +266,8 @@ function SimpleTable({ rows, type }: { rows: Result[]; type: 'regular' | 'falta'
                   <td className="py-3 px-4 font-mono font-medium text-zinc-900 dark:text-white">
                     {r.codigo}
                   </td>
-                  <td className="py-3 px-4 text-zinc-700 dark:text-zinc-300 max-w-xs truncate" title={r.nome_produto || undefined}>
-                    {r.nome_produto || <span className="italic text-zinc-400">Não cadastrado</span>}
+                  <td className="py-3 px-4 text-zinc-700 dark:text-zinc-300 max-w-xs truncate" title={getNome(r) || undefined}>
+                    {getNome(r) || <span className="italic text-zinc-400">Não cadastrado</span>}
                   </td>
                   <td className="py-3 px-4 text-right text-zinc-700 dark:text-zinc-300 font-medium">
                     {r.saldo_qtd}
@@ -285,8 +301,8 @@ function SimpleTable({ rows, type }: { rows: Result[]; type: 'regular' | 'falta'
               <div className="font-mono font-semibold text-zinc-900 dark:text-white mb-1">
                 {r.codigo}
               </div>
-              <div className="text-sm text-zinc-600 dark:text-zinc-400 mb-3 truncate" title={r.nome_produto || undefined}>
-                {r.nome_produto || <span className="italic text-zinc-400">Não cadastrado</span>}
+              <div className="text-sm text-zinc-600 dark:text-zinc-400 mb-3 truncate" title={getNome(r) || undefined}>
+                {getNome(r) || <span className="italic text-zinc-400">Não cadastrado</span>}
               </div>
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
                 <div>

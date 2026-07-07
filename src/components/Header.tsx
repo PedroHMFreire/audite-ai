@@ -107,17 +107,27 @@ export default function Header() {
                 >
                   Categorias
                 </Link>
-                <Link 
-                  to="/cronograma" 
+                <Link
+                  to="/cronograma"
                   className={`nav-schedule text-sm transition-colors ${
                     loc.pathname === '/cronograma'
-                      ? 'text-zinc-900 dark:text-zinc-100 font-medium' 
+                      ? 'text-zinc-900 dark:text-zinc-100 font-medium'
                       : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                   }`}
                 >
                   Cronograma
                 </Link>
-                
+                <Link
+                  to="/organizacao"
+                  className={`text-sm transition-colors ${
+                    loc.pathname === '/organizacao'
+                      ? 'text-zinc-900 dark:text-zinc-100 font-medium'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  }`}
+                >
+                  Organização
+                </Link>
+
                 {/* Admin Dashboard Link - Only for admins */}
                 {isAdmin && (
                   <Link 
@@ -213,19 +223,30 @@ export default function Header() {
               >
                 🏷️ Categorias
               </Link>
-              <Link 
-                to="/cronograma" 
+              <Link
+                to="/cronograma"
                 onClick={handleMobileNavClick}
                 className={`block p-3 rounded-lg transition-colors ${
                   loc.pathname === '/cronograma'
-                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium' 
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium'
                     : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                 }`}
               >
-                ⚙️ Cronograma
+                Cronograma
               </Link>
-              
-              <Link 
+              <Link
+                to="/organizacao"
+                onClick={handleMobileNavClick}
+                className={`block p-3 rounded-lg transition-colors ${
+                  loc.pathname === '/organizacao'
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium'
+                    : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                Organização
+              </Link>
+
+              <Link
                 to="/notificacoes" 
                 onClick={handleMobileNavClick}
                 className={`block p-3 rounded-lg transition-colors ${
