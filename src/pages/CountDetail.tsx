@@ -19,7 +19,7 @@ import {
 import { feedbackSuccess, feedbackWarning, feedbackNeutral, feedbackError } from '@/lib/feedback'
 import { onPendingChange, flushQueue, pendingCountFor } from '@/lib/offlineQueue'
 import { InputValidator } from '@/lib/security'
-import { getMyOrg, lookupProduct } from '@/lib/catalog'
+import { getMyOrg, lookupProduct, batchLookupProducts } from '@/lib/catalog'
 
 // Carregado sob demanda: a lib de leitura (ZXing) só baixa ao abrir o scanner.
 const BarcodeScanner = lazy(() => import('@/components/BarcodeScanner'))
@@ -47,11 +47,33 @@ export default function CountDetail() {
   const reconcileTimer = useRef<number | null>(null)
   const hasOrg = useRef<boolean>(false)
   const catalogCache = useRef<Map<string, string | null>>(new Map())
+  const [catalogNames, setCatalogNames] = useState<Map<string, string | null>>(new Map())
 
   const isEditable = count?.status !== 'finalizada' && count?.status !== 'arquivada'
   const canViewReport = count?.status === 'finalizada'
 
   const planCodes = useMemo(() => new Set(plan.map(p => p.codigo)), [plan])
+
+  const planNameMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of plan) if (p.nome) m.set(p.codigo, p.nome)
+    return m
+  }, [plan])
+
+  // Busca nomes do catálogo para itens contados que não estão no plano
+  useEffect(() => {
+    const needed = entries
+      .map(e => e.codigo)
+      .filter(c => !planNameMap.has(c) && !catalogNames.has(c))
+    if (needed.length === 0) return
+    batchLookupProducts(needed).then(map => {
+      setCatalogNames(prev => {
+        const next = new Map(prev)
+        needed.forEach(c => next.set(c, map.get(c) ?? null))
+        return next
+      })
+    })
+  }, [entries, planNameMap])
 
   useEffect(() => {
     if (!id || !InputValidator.uuid(id)) {
@@ -161,6 +183,7 @@ export default function CountDetail() {
           catalogCache.current.set(codigo, found?.nome ?? null)
         }
         const catalogNome = catalogCache.current.get(codigo)
+        setCatalogNames(prev => prev.has(codigo) ? prev : new Map(prev).set(codigo, catalogNome ?? null))
         if (catalogNome != null) {
           toastMsg = catalogNome || codigo
           toastDesc = `${codigo} · fora do plano desta contagem`
@@ -436,12 +459,20 @@ export default function CountDetail() {
           />
         )}
         <ul className="max-h-[22rem] overflow-auto divide-y divide-zinc-100 dark:divide-zinc-800 rounded-lg border border-zinc-100 dark:border-zinc-800">
-          {filteredEntries.map(entry => (
+          {filteredEntries.map(entry => {
+            const nome = planNameMap.get(entry.codigo) || catalogNames.get(entry.codigo) || null
+            return (
             <li key={entry.id} className="flex items-center gap-3 py-3 px-3">
               <StatusDot status={statusOf(entry.codigo)} />
               <div className="flex-1 min-w-0">
-                <div className="font-mono font-semibold truncate">{entry.codigo}</div>
-                <div className="text-xs text-muted">
+                {nome
+                  ? <>
+                      <div className="text-sm font-medium truncate">{nome}</div>
+                      <div className="text-xs font-mono text-zinc-400 dark:text-zinc-500 truncate">{entry.codigo}</div>
+                    </>
+                  : <div className="font-mono font-semibold truncate">{entry.codigo}</div>
+                }
+                <div className="text-xs text-muted mt-0.5">
                   {entry.qty} un
                   {entry.pending && <span className="ml-2 text-primary-500">⟳ sincronizando</span>}
                 </div>
@@ -456,7 +487,8 @@ export default function CountDetail() {
                 </button>
               )}
             </li>
-          ))}
+            )
+          })}
           {filteredEntries.length === 0 && (
             <li className="py-8 px-4 text-center text-sm text-muted italic">
               {entries.length === 0 ? 'Nenhum item contado ainda' : 'Nenhum código corresponde à busca'}
