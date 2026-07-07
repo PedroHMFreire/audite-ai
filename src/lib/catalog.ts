@@ -141,12 +141,20 @@ export function getInviteLink(token: string): string {
 // CATÁLOGO DE PRODUTOS
 // ============================================================
 
-export async function uploadCatalog(items: { codigo: string; nome: string }[]): Promise<number> {
-  const { data, error } = await supabase.rpc('bulk_upsert_catalog', {
-    p_items: items
-  })
-  if (error) throw new Error(error.message)
-  return (data as number) || 0
+export async function uploadCatalog(
+  items: { codigo: string; nome: string }[],
+  onProgress?: (done: number, total: number) => void
+): Promise<number> {
+  const CHUNK = 500
+  let inserted = 0
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const chunk = items.slice(i, i + CHUNK)
+    const { data, error } = await supabase.rpc('bulk_upsert_catalog', { p_items: chunk })
+    if (error) throw new Error(error.message)
+    inserted += (data as number) || 0
+    onProgress?.(Math.min(i + CHUNK, items.length), items.length)
+  }
+  return inserted
 }
 
 export async function getCatalog(

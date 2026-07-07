@@ -266,22 +266,26 @@ function CatalogTab({ orgCtx }: { orgCtx: OrgContext & object }) {
     searchTimer.current = setTimeout(() => loadItems(q, 0, true), 350)
   }
 
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
     setUploading(true)
     setUploadMsg(null)
+    setUploadProgress(null)
     try {
       const rows = await parseFile(file)
       if (rows.length === 0) { setUploadMsg('Nenhum produto encontrado no arquivo.'); return }
-      const count = await uploadCatalog(rows)
-      setUploadMsg(`${count} produtos adicionados/atualizados.`)
+      const count = await uploadCatalog(rows, (done, total) => setUploadProgress({ done, total }))
+      setUploadMsg(`${count} produtos adicionados/atualizados com sucesso.`)
       loadItems(search, 0, true)
     } catch (err: any) {
       setUploadMsg('Erro: ' + err.message)
     } finally {
       setUploading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -348,7 +352,23 @@ function CatalogTab({ orgCtx }: { orgCtx: OrgContext & object }) {
               className="block w-full text-sm file:btn file:py-2 file:px-3 file:mr-3 file:border-0 file:rounded-xl"
             />
           </label>
-          {uploading && <p className="text-sm text-primary-500">Processando arquivo...</p>}
+          {uploading && !uploadProgress && (
+            <p className="text-sm text-primary-500">Lendo arquivo...</p>
+          )}
+          {uploading && uploadProgress && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-zinc-500">
+                <span>Enviando produtos...</span>
+                <span>{uploadProgress.done.toLocaleString('pt-BR')} / {uploadProgress.total.toLocaleString('pt-BR')}</span>
+              </div>
+              <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary-500 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
           {uploadMsg && <p className={`text-sm ${uploadMsg.startsWith('Erro') ? 'text-red-500' : 'text-emerald-600'}`}>{uploadMsg}</p>}
           {total > 0 && (
             <button
@@ -436,20 +456,20 @@ async function parseFile(file: File): Promise<{ codigo: string; nome: string }[]
   }
   if (name.endsWith('.xlsx')) {
     const arrayBuffer = await file.arrayBuffer()
-    const { Workbook } = await import('exceljs')
-    const wb = new Workbook()
-    await wb.xlsx.load(arrayBuffer)
-    const ws = wb.worksheets[0]
+    const XLSX = await import('xlsx')
+    const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: false, sheetStubs: false })
+    const ws = wb.Sheets[wb.SheetNames[0]]
     if (!ws) return []
+    // sheet_to_json com header:1 retorna array de arrays — sem criar objetos por linha
+    const raw = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' })
     const rows: { codigo: string; nome: string }[] = []
-    let firstRow = true
-    ws.eachRow(row => {
-      if (firstRow) { firstRow = false; return }
-      const vals = Array.isArray(row.values) ? row.values.slice(1) : []
-      const codigo = String(vals[0] ?? '').trim()
-      const nome = String(vals[1] ?? '').trim()
+    // pula linha 0 se for cabeçalho (detecta por: primeira col não é numérica/alfanum de produto)
+    const startIdx = raw.length > 0 && isNaN(Number(String(raw[0][0]).trim())) && /^[a-zA-ZÀ-ÿ]/.test(String(raw[0][0]).trim()) ? 1 : 0
+    for (let i = startIdx; i < raw.length; i++) {
+      const codigo = String(raw[i][0] ?? '').trim()
+      const nome = String(raw[i][1] ?? '').trim()
       if (codigo) rows.push({ codigo, nome })
-    })
+    }
     return rows
   }
   throw new Error('Formato inválido. Use .xlsx ou .csv')
