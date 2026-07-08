@@ -66,6 +66,25 @@ export default function CountDetail() {
     return m
   }, [plan])
 
+  // Mapeia variações do código → código canônico do plano.
+  // Cobre: case-insensitive + código sem letra final (ex: "98438" → "98438p").
+  const planCodeNormMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of plan) {
+      m.set(p.codigo.toLowerCase(), p.codigo)
+      // sem a última letra (p, m, g, a, b…)
+      if (/[a-z]$/i.test(p.codigo) && p.codigo.length > 1) {
+        m.set(p.codigo.slice(0, -1).toLowerCase(), p.codigo)
+      }
+    }
+    return m
+  }, [plan])
+
+  // Resolve o código digitado/lido para o código canônico do plano, se existir.
+  const resolveCode = useCallback((raw: string): string => {
+    return planCodeNormMap.get(raw.toLowerCase()) ?? raw
+  }, [planCodeNormMap])
+
   // Busca nomes do catálogo para todos os itens sem nome no plano
   useEffect(() => {
     const needed = entries
@@ -191,7 +210,7 @@ export default function CountDetail() {
       if (!isEditable) addToast({ type: 'warning', message: 'Contagem bloqueada', description: 'Reabra para inserir itens' })
       return
     }
-    const codigo = codigoRaw.trim()
+    const codigo = resolveCode(codigoRaw.trim()) // normaliza para o código canônico do plano
     if (!codigo) return
     const inPlan = planCodes.size === 0 || planCodes.has(codigo)
 
