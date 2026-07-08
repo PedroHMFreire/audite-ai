@@ -48,6 +48,12 @@ export default function CountDetail() {
   const hasOrg = useRef<boolean>(false)
   const catalogCache = useRef<Map<string, string | null>>(new Map())
   const [catalogNames, setCatalogNames] = useState<Map<string, string | null>>(new Map())
+  const [pendingUnknown, setPendingUnknown] = useState<{
+    codigo: string
+    qty: number
+    suggestion: string | null
+    suggestionNome: string | null
+  } | null>(null)
 
   const isEditable = count?.status !== 'finalizada' && count?.status !== 'arquivada'
   const canViewReport = count?.status === 'finalizada'
@@ -144,6 +150,42 @@ export default function CountDetail() {
     }
   }, [id, isEditable, addToast])
 
+  // Registra a entrada de fato (após validação ou confirmação)
+  const doAdd = useCallback(async (codigo: string, qty: number, inPlan: boolean, catalogNome?: string | null) => {
+    let newTotal = qty
+    setEntries(prev => {
+      const idx = prev.findIndex(e => e.codigo === codigo)
+      if (idx >= 0) {
+        newTotal = prev[idx].qty + qty
+        const next = [...prev]
+        next[idx] = { ...next[idx], qty: newTotal, pending: true }
+        const [moved] = next.splice(idx, 1)
+        return [moved, ...next]
+      }
+      return [{ id: `tmp-${codigo}`, codigo, qty, pending: true }, ...prev]
+    })
+    lastAddRef.current = { codigo, qty }
+    if (inPlan) feedbackSuccess()
+    else feedbackWarning()
+
+    try {
+      await addManualEntry(id!, codigo, qty)
+      let toastType: 'success' | 'warning' | 'error' = inPlan ? 'success' : 'warning'
+      let toastMsg = catalogNome || codigo
+      let toastDesc = inPlan
+        ? `Total contado: ${newTotal}`
+        : catalogNome
+          ? `${codigo} · fora do plano desta contagem`
+          : 'Código desconhecido registrado como excesso'
+      addToast({ type: toastType, message: toastMsg, description: toastDesc, duration: 2200 })
+      scheduleReconcile()
+    } catch (err) {
+      feedbackError()
+      const message = err instanceof Error ? err.message : 'Erro ao adicionar'
+      addToast({ type: 'error', message: 'Não foi possível adicionar', description: message })
+    }
+  }, [id, addToast, scheduleReconcile])
+
   const onAdd = useCallback(async (codigoRaw: string, qty: number = 1) => {
     if (!id || !isEditable) {
       if (!isEditable) addToast({ type: 'warning', message: 'Contagem bloqueada', description: 'Reabra para inserir itens' })
@@ -153,59 +195,42 @@ export default function CountDetail() {
     if (!codigo) return
     const inPlan = planCodes.size === 0 || planCodes.has(codigo)
 
-    // Atualização otimista: a tela responde na hora, o banco sincroniza depois.
-    let newTotal = qty
-    setEntries(prev => {
-      const idx = prev.findIndex(e => e.codigo === codigo)
-      if (idx >= 0) {
-        newTotal = prev[idx].qty + qty
-        const next = [...prev]
-        next[idx] = { ...next[idx], qty: newTotal, pending: true }
-        // move para o topo (mais recente)
-        const [moved] = next.splice(idx, 1)
-        return [moved, ...next]
+    // Para códigos fora do plano com catálogo: validar ANTES do update otimista
+    if (!inPlan && hasOrg.current) {
+      if (!catalogCache.current.has(codigo)) {
+        const found = await lookupProduct(codigo)
+        catalogCache.current.set(codigo, found?.nome ?? null)
+        if (found?.nome) setCatalogNames(prev => new Map(prev).set(codigo, found.nome))
       }
-      return [{ id: `tmp-${codigo}`, codigo, qty, pending: true }, ...prev]
-    })
-    lastAddRef.current = { codigo, qty }
+      const catalogNome = catalogCache.current.get(codigo)
 
-    if (inPlan) feedbackSuccess()
-    else feedbackWarning()
-
-    try {
-      await addManualEntry(id, codigo, qty)
-
-      // Monta a mensagem do toast com base no plano e no catálogo
-      let toastType: 'success' | 'warning' | 'error' = inPlan ? 'success' : 'warning'
-      let toastMsg = codigo
-      let toastDesc = inPlan ? `Total contado: ${newTotal}` : 'Registrado como excesso'
-
-      if (!inPlan && hasOrg.current) {
-        // Consulta o catálogo (com cache para não repetir chamadas)
-        if (!catalogCache.current.has(codigo)) {
-          const found = await lookupProduct(codigo)
-          catalogCache.current.set(codigo, found?.nome ?? null)
-        }
-        const catalogNome = catalogCache.current.get(codigo)
-        setCatalogNames(prev => prev.has(codigo) ? prev : new Map(prev).set(codigo, catalogNome ?? null))
-        if (catalogNome != null) {
-          toastMsg = catalogNome || codigo
-          toastDesc = `${codigo} · fora do plano desta contagem`
-          toastType = 'warning'
-        } else {
-          toastDesc = 'Código não encontrado no catálogo'
-          toastType = 'error'
-        }
+      if (catalogNome == null) {
+        // Código desconhecido: pedir confirmação antes de registrar
+        feedbackWarning()
+        const suggestion = findSimilarCode(codigo, Array.from(planCodes))
+        setPendingUnknown({
+          codigo,
+          qty,
+          suggestion,
+          suggestionNome: suggestion ? (planNameMap.get(suggestion) || null) : null
+        })
+        return
       }
 
-      addToast({ type: toastType, message: toastMsg, description: toastDesc, duration: 2200 })
-      scheduleReconcile()
-    } catch (err) {
-      feedbackError()
-      const message = err instanceof Error ? err.message : 'Erro ao adicionar'
-      addToast({ type: 'error', message: 'Não foi possível adicionar', description: message })
+      // Encontrado no catálogo: registrar normalmente
+      await doAdd(codigo, qty, false, catalogNome)
+      return
     }
-  }, [id, isEditable, planCodes, addToast, scheduleReconcile])
+
+    await doAdd(codigo, qty, inPlan, undefined)
+  }, [id, isEditable, planCodes, addToast, doAdd, planNameMap])
+
+  const confirmUnknownCode = useCallback(async () => {
+    if (!pendingUnknown) return
+    const { codigo, qty } = pendingUnknown
+    setPendingUnknown(null)
+    await doAdd(codigo, qty, false, null)
+  }, [pendingUnknown, doAdd])
 
   const undoLast = useCallback(async () => {
     const last = lastAddRef.current
@@ -538,6 +563,55 @@ export default function CountDetail() {
         </Suspense>
       )}
 
+      {/* Modal: código desconhecido */}
+      {pendingUnknown && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="card w-full max-w-sm space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
+            <div>
+              <div className="text-sm font-semibold text-red-600 dark:text-red-400 mb-1">Código não encontrado</div>
+              <div className="text-2xl font-mono font-bold tracking-wider">{pendingUnknown.codigo}</div>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
+                Este código não está no plano nem no catálogo de produtos.<br />
+                Verifique se foi lido ou digitado corretamente.
+              </p>
+            </div>
+
+            {pendingUnknown.suggestion && (
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-2">
+                <div className="text-xs font-semibold text-amber-700 dark:text-amber-400">Você quis dizer?</div>
+                <div className="font-mono font-bold text-zinc-900 dark:text-white">{pendingUnknown.suggestion}</div>
+                {pendingUnknown.suggestionNome && (
+                  <div className="text-sm text-zinc-600 dark:text-zinc-400">{pendingUnknown.suggestionNome}</div>
+                )}
+                <button
+                  className="text-xs text-amber-700 dark:text-amber-400 underline underline-offset-2"
+                  onClick={() => {
+                    const s = pendingUnknown.suggestion!
+                    const q = pendingUnknown.qty
+                    setPendingUnknown(null)
+                    onAdd(s, q)
+                  }}
+                >
+                  Inserir {pendingUnknown.suggestion} em vez disso →
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button className="btn-ghost flex-1 min-h-11" onClick={() => setPendingUnknown(null)}>
+                Cancelar
+              </button>
+              <button
+                className="flex-1 min-h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors"
+                onClick={confirmUnknownCode}
+              >
+                Inserir mesmo assim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog
         open={!!removeTarget}
         title="Remover item?"
@@ -612,4 +686,32 @@ function SyncStatus({ countId }: { countId: string }) {
     return <span className="inline-flex items-center gap-1.5 text-xs text-primary-500"><span className="h-2 w-2 rounded-full bg-primary-500 animate-pulse" />Sincronizando {pending}…</span>
   }
   return <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tudo salvo</span>
+}
+
+function levenshtein(a: string, b: string): number {
+  const n = b.length
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j]
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1])
+      prev = temp
+    }
+  }
+  return dp[n]
+}
+
+function findSimilarCode(codigo: string, planCodes: string[]): string | null {
+  const MAX_DIST = 2
+  const lower = codigo.toLowerCase()
+  let best: string | null = null
+  let bestDist = MAX_DIST + 1
+  for (const c of planCodes) {
+    if (Math.abs(c.length - codigo.length) > MAX_DIST) continue
+    const d = levenshtein(lower, c.toLowerCase())
+    if (d > 0 && d < bestDist) { bestDist = d; best = c }
+  }
+  return bestDist <= MAX_DIST ? best : null
 }
