@@ -60,16 +60,20 @@ export default function CountDetail() {
     return m
   }, [plan])
 
-  // Busca nomes do catálogo para itens contados que não estão no plano
+  // Busca nomes do catálogo para todos os itens sem nome no plano
   useEffect(() => {
     const needed = entries
       .map(e => e.codigo)
-      .filter(c => !planNameMap.has(c) && !catalogNames.has(c))
+      .filter(c => !planNameMap.get(c) && !catalogNames.get(c))
     if (needed.length === 0) return
     batchLookupProducts(needed).then(map => {
+      if (map.size === 0) return // sem resultado: não cacheia, permite retry
       setCatalogNames(prev => {
         const next = new Map(prev)
-        needed.forEach(c => next.set(c, map.get(c) ?? null))
+        needed.forEach(c => {
+          const found = map.get(c)
+          if (found) next.set(c, found) // só armazena se achou nome
+        })
         return next
       })
     })
@@ -465,13 +469,12 @@ export default function CountDetail() {
             <li key={entry.id} className="flex items-center gap-3 py-3 px-3">
               <StatusDot status={statusOf(entry.codigo)} />
               <div className="flex-1 min-w-0">
-                {nome
-                  ? <>
-                      <div className="text-sm font-medium truncate">{nome}</div>
-                      <div className="text-xs font-mono text-zinc-400 dark:text-zinc-500 truncate">{entry.codigo}</div>
-                    </>
-                  : <div className="font-mono font-semibold truncate">{entry.codigo}</div>
-                }
+                <div className="text-sm font-medium truncate">
+                  {nome || <span className="font-mono font-semibold">{entry.codigo}</span>}
+                </div>
+                {nome && (
+                  <div className="text-xs font-mono text-zinc-400 dark:text-zinc-500 truncate">{entry.codigo}</div>
+                )}
                 <div className="text-xs text-muted mt-0.5">
                   {entry.qty} un
                   {entry.pending && <span className="ml-2 text-primary-500">⟳ sincronizando</span>}
