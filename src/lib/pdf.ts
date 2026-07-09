@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
-import type { Result } from './db'
+import type { Result, DivergenceJustification } from './db'
+import { MOTIVO_LABELS } from './db'
 
 export function generateReportPDF(opts: {
   logoDataUrl?: string // PNG/JPEG dataURL
@@ -7,9 +8,17 @@ export function generateReportPDF(opts: {
   storeName?: string
   date: string
   results: Result[]
+  justifications?: Map<string, DivergenceJustification>
 }): Blob {
-  const { logoDataUrl, countName, storeName, date, results } = opts
+  const { logoDataUrl, countName, storeName, date, results, justifications } = opts
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+
+  function justificativaLabel(codigo: string): string {
+    const j = justifications?.get(codigo)
+    if (!j) return 'Pendente'
+    const label = MOTIVO_LABELS[j.motivo]
+    return j.observacao ? `${label} — ${j.observacao}` : label
+  }
 
   // Layout
   const marginLeft = 40
@@ -17,15 +26,17 @@ export function generateReportPDF(opts: {
   const pageWidth = doc.internal.pageSize.getWidth()
   const usableRight = pageWidth - marginRight
 
-  // Colunas (Nome mais largo)
+  // Colunas (Nome mais largo; Justificativa some espaço da coluna Nome)
   const xCode   = marginLeft
   const wCode   = 90
   const xName   = xCode + wCode + 10
-  const wName   = 300
+  const wName   = 170
   const xManual = xName + wName + 10
-  const wManual = 50
+  const wManual = 45
   const xSaldo  = xManual + wManual + 10
-  const wSaldo  = 50
+  const wSaldo  = 45
+  const xJust   = xSaldo + wSaldo + 10
+  const wJust   = usableRight - xJust
 
   // ===== Cabeçalho =====
   let y = 40
@@ -60,7 +71,7 @@ export function generateReportPDF(opts: {
     { title: 'Produtos em Falta', key: 'falta' },
   ]
 
-  function printTableHeader(title: string) {
+  function printTableHeader(title: string, showJust: boolean) {
     doc.setFontSize(14)
     doc.text(title, marginLeft, pageY)
     pageY += 12
@@ -69,25 +80,28 @@ export function generateReportPDF(opts: {
     doc.text('Nome',   xName, pageY)
     doc.text('Manual', xManual, pageY)
     doc.text('Saldo',  xSaldo, pageY)
+    if (showJust) doc.text('Justificativa', xJust, pageY)
     pageY += 10
     doc.setDrawColor(200)
     doc.line(marginLeft, pageY, usableRight, pageY)
     pageY += 10
   }
 
-  function addPageIfNeeded(minSpace: number, headerTitle: string) {
+  function addPageIfNeeded(minSpace: number, headerTitle: string, showJust: boolean) {
     const pageHeight = doc.internal.pageSize.getHeight()
     if (pageY + minSpace > pageHeight - 40) {
       doc.addPage()
       pageY = 40
-      printTableHeader(headerTitle)
+      printTableHeader(headerTitle, showJust)
     }
   }
 
   for (const sec of sections) {
+    const showJust = sec.key !== 'regular'
+
     // Cabeçalho da seção
-    addPageIfNeeded(60, sec.title)
-    printTableHeader(sec.title)
+    addPageIfNeeded(60, sec.title, showJust)
+    printTableHeader(sec.title, showJust)
 
     const rows = results.filter(r => r.status === sec.key)
     for (const r of rows) {
@@ -105,8 +119,20 @@ export function generateReportPDF(opts: {
         nameLines[1] = clipped.endsWith('…') ? clipped : (clipped + '…')
       }
 
-      const rowHeight = lineHeight * Math.max(1, nameLines.length) + 4
-      addPageIfNeeded(rowHeight + 6, sec.title)
+      // Quebra da justificativa em até 3 linhas (só para excesso/falta)
+      let justLines: string[] = []
+      if (showJust) {
+        const justSplit = doc.splitTextToSize(justificativaLabel(codigo), wJust)
+        justLines = justSplit.slice(0, 3)
+        if (justSplit.length > 3) {
+          const last = justLines[2]
+          const clipped = doc.splitTextToSize(last + '…', wJust)[0]
+          justLines[2] = clipped.endsWith('…') ? clipped : (clipped + '…')
+        }
+      }
+
+      const rowHeight = lineHeight * Math.max(1, nameLines.length, justLines.length) + 4
+      addPageIfNeeded(rowHeight + 6, sec.title, showJust)
 
       // Valores
       doc.setFontSize(10)
@@ -115,6 +141,9 @@ export function generateReportPDF(opts: {
       doc.text(saldo,  xSaldo, pageY)
       for (let i = 0; i < nameLines.length; i++) {
         doc.text(String(nameLines[i]), xName, pageY + (i * lineHeight), { maxWidth: wName })
+      }
+      for (let i = 0; i < justLines.length; i++) {
+        doc.text(String(justLines[i]), xJust, pageY + (i * lineHeight), { maxWidth: wJust })
       }
 
       pageY += rowHeight

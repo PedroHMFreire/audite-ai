@@ -554,6 +554,65 @@ export async function getResultsByCount(count_id: string) {
   return await fetchAllByCount<Result>('results', '*', count_id)
 }
 
+export type Motivo = 'falha_troca' | 'erro_insercao' | 'duplicada_sistema' | 'codigo_errado' | 'outra'
+export const MOTIVO_LABELS: Record<Motivo, string> = {
+  falha_troca: 'Falha na Troca',
+  erro_insercao: 'Erro de Inserção',
+  duplicada_sistema: 'Duplicada no Sistema',
+  codigo_errado: 'Código Errado',
+  outra: 'Outra',
+}
+export type DivergenceJustification = {
+  id?: string
+  count_id: string
+  codigo: string
+  motivo: Motivo
+  observacao: string | null
+  created_by?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+/** Busca todas as justificativas de divergência já salvas para uma contagem. */
+export async function getJustifications(count_id: string): Promise<DivergenceJustification[]> {
+  return await fetchAllByCount<DivergenceJustification>('divergence_justifications', '*', count_id)
+}
+
+/**
+ * Cria ou atualiza a justificativa de um item divergente (chave count_id+codigo).
+ * Sobrevive a reopenCount/compute_count_results, que só apagam `results`.
+ */
+export async function upsertJustification(
+  count_id: string,
+  codigo: string,
+  motivo: Motivo,
+  observacao?: string | null
+): Promise<void> {
+  if (!InputValidator.uuid(count_id)) {
+    SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_JUSTIFICATION', { count_id })
+    throw new Error('ID da contagem inválido')
+  }
+  if (motivo === 'outra' && !observacao?.trim()) {
+    throw new Error('Descreva o motivo no campo de observação')
+  }
+
+  const user_id = await getCurrentUserId()
+  const { error } = await supabase
+    .from('divergence_justifications')
+    .upsert(
+      {
+        count_id,
+        codigo,
+        motivo,
+        observacao: motivo === 'outra' ? observacao!.trim() : null,
+        created_by: user_id,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'count_id,codigo' }
+    )
+  if (error) throw error
+}
+
 export async function reopenCount(count_id: string) {
   // Validação de UUID
   if (!InputValidator.uuid(count_id)) {

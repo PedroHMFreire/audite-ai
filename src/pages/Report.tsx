@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getCountById, getResultsByCount, getPlanItems, listManualEntries, getStoreById, reopenCount } from '@/lib/db'
-import type { Result } from '@/lib/db'
+import { getCountById, getResultsByCount, getPlanItems, listManualEntries, getStoreById, reopenCount, getJustifications, upsertJustification, MOTIVO_LABELS } from '@/lib/db'
+import type { Result, DivergenceJustification, Motivo } from '@/lib/db'
 import { getMyOrg, batchLookupProducts } from '@/lib/catalog'
 import { generateReportPDF } from '@/lib/pdf'
 import CoverageProgressBar from '@/components/CoverageProgressBar'
@@ -20,6 +20,7 @@ export default function Report() {
   const [logoPng, setLogoPng] = useState<string | undefined>(undefined)
   const [reopening, setReopening] = useState(false)
   const [catalogNames, setCatalogNames] = useState<Map<string, string>>(new Map())
+  const [justifications, setJustifications] = useState<Map<string, DivergenceJustification>>(new Map())
 
   useEffect(() => {
     if (!id) return
@@ -55,6 +56,7 @@ export default function Report() {
     })
     getPlanItems(id).then(setPlan)
     listManualEntries(id).then(setEntries)
+    getJustifications(id).then(list => setJustifications(new Map(list.map(j => [j.codigo, j]))))
 
     // Tenta converter logo.svg -> PNG (para o jsPDF)
     ;(async () => {
@@ -86,6 +88,14 @@ export default function Report() {
     return { planCodes, planItems, insertedCodes, insertedItems }
   }, [plan, entries])
 
+  function handleJustificationSaved(codigo: string, j: DivergenceJustification) {
+    setJustifications(prev => {
+      const next = new Map(prev)
+      next.set(codigo, j)
+      return next
+    })
+  }
+
   function exportPDF() {
     try {
       const blob = generateReportPDF({
@@ -93,7 +103,8 @@ export default function Report() {
         countName: count?.nome || '',
         storeName: storeName || '—',
         date: new Date(count?.created_at || Date.now()).toLocaleString(),
-        results: rows
+        results: rows,
+        justifications
       })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -172,11 +183,24 @@ export default function Report() {
       </div>
       <div className="card">
         <div className="text-sm mb-3">Produtos em excesso</div>
-        <SimpleTable rows={rows.filter(r=>r.status==='excesso')} type="excesso" catalogNames={catalogNames} />
+        <SimpleTable
+          rows={rows.filter(r=>r.status==='excesso')}
+          type="excesso"
+          catalogNames={catalogNames}
+          countId={id}
+          justifications={justifications}
+          onJustificationSaved={handleJustificationSaved}
+        />
       </div>
       <div className="card">
         <div className="text-sm mb-3">Produtos em falta</div>
-        <SimpleTable rows={rows.filter(r=>r.status==='falta')} type="falta" />
+        <SimpleTable
+          rows={rows.filter(r=>r.status==='falta')}
+          type="falta"
+          countId={id}
+          justifications={justifications}
+          onJustificationSaved={handleJustificationSaved}
+        />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2">
@@ -193,7 +217,15 @@ export default function Report() {
   )
 }
 
-function SimpleTable({ rows, type, catalogNames = new Map() }: { rows: Result[]; type: 'regular' | 'falta' | 'excesso'; catalogNames?: Map<string, string> }) {
+function SimpleTable({ rows, type, catalogNames = new Map(), countId, justifications, onJustificationSaved }: {
+  rows: Result[]
+  type: 'regular' | 'falta' | 'excesso'
+  catalogNames?: Map<string, string>
+  countId?: string
+  justifications?: Map<string, DivergenceJustification>
+  onJustificationSaved?: (codigo: string, j: DivergenceJustification) => void
+}) {
+  const hasJustification = type !== 'regular'
   const getNome = (r: Result) => r.nome_produto || catalogNames.get(r.codigo) || ''
   // Diferença semântica por tipo de tabela:
   // - falta:   saldo − encontrado  → positivo = quantas unidades faltam
@@ -256,6 +288,11 @@ function SimpleTable({ rows, type, catalogNames = new Map() }: { rows: Result[];
               <th className="py-3 px-4 font-semibold text-zinc-700 dark:text-zinc-300 text-right">
                 <span title={diffTitle}>{diffLabel}</span>
               </th>
+              {hasJustification && (
+                <th className="py-3 px-4 font-semibold text-zinc-700 dark:text-zinc-300">
+                  <span title="Motivo da divergência">Justificativa</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -278,12 +315,24 @@ function SimpleTable({ rows, type, catalogNames = new Map() }: { rows: Result[];
                   <td className={`py-3 px-4 text-right ${diffClass(diff)}`}>
                     {diff === 0 ? '✓' : `+${diff}`}
                   </td>
+                  {hasJustification && (
+                    <td className="py-3 px-4">
+                      {countId && onJustificationSaved && (
+                        <JustificationEditor
+                          countId={countId}
+                          codigo={r.codigo}
+                          justification={justifications?.get(r.codigo)}
+                          onSaved={onJustificationSaved}
+                        />
+                      )}
+                    </td>
+                  )}
                 </tr>
               )
             })}
             {rows.length === 0 && (
               <tr>
-                <td className="py-4 px-4 text-center text-zinc-500 dark:text-zinc-400 italic" colSpan={5}>
+                <td className="py-4 px-4 text-center text-zinc-500 dark:text-zinc-400 italic" colSpan={hasJustification ? 6 : 5}>
                   Nenhum item encontrado
                 </td>
               </tr>
@@ -320,6 +369,17 @@ function SimpleTable({ rows, type, catalogNames = new Map() }: { rows: Result[];
                   </div>
                 </div>
               </div>
+              {hasJustification && countId && onJustificationSaved && (
+                <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+                  <div className="text-zinc-500 dark:text-zinc-400 mb-1 text-xs">Justificativa</div>
+                  <JustificationEditor
+                    countId={countId}
+                    codigo={r.codigo}
+                    justification={justifications?.get(r.codigo)}
+                    onSaved={onJustificationSaved}
+                  />
+                </div>
+              )}
             </div>
           )
         })}
@@ -330,6 +390,91 @@ function SimpleTable({ rows, type, catalogNames = new Map() }: { rows: Result[];
         )}
       </div>
     </>
+  )
+}
+
+const MOTIVO_OPTIONS = Object.entries(MOTIVO_LABELS) as [Motivo, string][]
+
+function JustificationEditor({ countId, codigo, justification, onSaved }: {
+  countId: string
+  codigo: string
+  justification?: DivergenceJustification
+  onSaved: (codigo: string, j: DivergenceJustification) => void
+}) {
+  const [motivo, setMotivo] = useState<Motivo | ''>(justification?.motivo || '')
+  const [observacao, setObservacao] = useState(justification?.observacao || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setMotivo(justification?.motivo || '')
+    setObservacao(justification?.observacao || '')
+  }, [justification])
+
+  async function save(nextMotivo: Motivo, nextObservacao: string) {
+    if (nextMotivo === 'outra' && !nextObservacao.trim()) {
+      setError('Descreva o motivo')
+      return
+    }
+    setError(null)
+    setSaving(true)
+    try {
+      await upsertJustification(countId, codigo, nextMotivo, nextObservacao)
+      onSaved(codigo, {
+        count_id: countId,
+        codigo,
+        motivo: nextMotivo,
+        observacao: nextMotivo === 'outra' ? nextObservacao.trim() : null,
+      })
+    } catch (e: any) {
+      setError(e?.message || 'Erro ao salvar justificativa')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleMotivoChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const next = e.target.value as Motivo | ''
+    setMotivo(next)
+    if (!next) return
+    if (next === 'outra') {
+      if (observacao.trim()) void save(next, observacao)
+      return
+    }
+    void save(next, '')
+  }
+
+  function handleObservacaoBlur() {
+    if (motivo === 'outra') void save('outra', observacao)
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[10rem]">
+      {!motivo && <span className="badge badge-warning w-fit">Pendente</span>}
+      <select
+        className="input py-1.5 text-xs"
+        value={motivo}
+        onChange={handleMotivoChange}
+        disabled={saving}
+      >
+        <option value="">Selecionar motivo…</option>
+        {MOTIVO_OPTIONS.map(([value, label]) => (
+          <option key={value} value={value}>{label}</option>
+        ))}
+      </select>
+      {motivo === 'outra' && (
+        <input
+          type="text"
+          className="input py-1.5 text-xs"
+          placeholder="Descreva o motivo…"
+          value={observacao}
+          onChange={e => setObservacao(e.target.value)}
+          onBlur={handleObservacaoBlur}
+          disabled={saving}
+        />
+      )}
+      {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+    </div>
   )
 }
 
