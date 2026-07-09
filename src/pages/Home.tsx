@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import QuickActionCard from '@/components/QuickActionCard'
 import DashboardCards from '@/components/DashboardCards'
 import Charts from '@/components/Charts'
@@ -7,7 +6,7 @@ import { RecentCountsTimeline } from '@/components/RecentCountsTimeline'
 import StorePerformance from '@/components/StorePerformance'
 import ContextualSidebar from '@/components/ContextualSidebar'
 import TutorialModal from '@/components/TutorialModal'
-import { createCount, getTotalsLastCounts } from '@/lib/db'
+import { getTotalsLastCounts } from '@/lib/db'
 import { supabase } from '@/lib/supabaseClient'
 import { SkeletonLoader } from '@/components/SkeletonLoader'
 
@@ -17,7 +16,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [countTotal, setCountTotal] = useState(0)
   const [showTutorial, setShowTutorial] = useState(false)
-  const nav = useNavigate()
 
   useEffect(() => {
     (async () => {
@@ -45,24 +43,13 @@ export default function Home() {
     })()
   }, [])
 
-  async function handleStartCount(nome: string, loja?: string | null) {
-    try {
-      const c = await createCount(nome.trim(), loja || null)
-      if (c?.id) {
-        nav(`/contagens/${c.id}`)
-      }
-    } catch (err) {
-      console.error('Error creating count:', err)
-    }
-  }
-
   return (
     <div className="flex-1">
       <div className="max-w-7xl mx-auto px-4 py-6 lg:pr-80">
         <div className="space-y-6">
           {/* Card de ação rápida */}
           <div data-quick-action>
-            <QuickActionCard onStartCount={handleStartCount} />
+            <QuickActionCard />
           </div>
 
           {loading ? (

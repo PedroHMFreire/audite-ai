@@ -16,7 +16,7 @@ export function RecentCountsTimeline() {
       setLoading(true)
       const { data } = await supabase
         .from('counts')
-        .select('*')
+        .select('*, stores(name)')
         .order('created_at', { ascending: false })
         .limit(8)
 
@@ -104,8 +104,8 @@ export function RecentCountsTimeline() {
                       <p className="font-medium text-zinc-900 dark:text-white group-hover:text-primary-600 transition-colors truncate">
                         {count.nome}
                       </p>
-                      {count.loja && (
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">📍 {count.loja}</p>
+                      {count.stores?.name && (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">📍 {count.stores.name}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">

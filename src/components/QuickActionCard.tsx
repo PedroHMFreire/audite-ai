@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Plus, Clock } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
-import { createCount } from '@/lib/db'
+import { createCount, getRecentStoreNames } from '@/lib/db'
 import { useNavigate } from 'react-router-dom'
 
-type Props = {
-  onStartCount?: (nome: string, loja?: string | null) => void
-}
-
-export default function QuickActionCard({ onStartCount }: Props) {
+export default function QuickActionCard() {
   const [nome, setNome] = useState('')
   const [loja, setLoja] = useState('')
   const [recentStores, setRecentStores] = useState<string[]>([])
@@ -16,30 +11,15 @@ export default function QuickActionCard({ onStartCount }: Props) {
   const nav = useNavigate()
 
   useEffect(() => {
-    loadRecentStores()
+    getRecentStoreNames(5).then(setRecentStores).catch(() => {})
   }, [])
-
-  async function loadRecentStores() {
-    const { data, error } = await supabase
-      .from('counts')
-      .select('loja')
-      .not('loja', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(5)
-
-    if (!error && data) {
-      const unique = Array.from(new Set(data.map(d => d.loja).filter(Boolean))) as string[]
-      setRecentStores(unique)
-    }
-  }
 
   async function handleStartCount() {
     if (!nome.trim()) return alert('Defina um nome para a contagem')
-    
+
     try {
       setLoading(true)
       const c = await createCount(nome.trim(), loja.trim() || null)
-      onStartCount?.(nome, loja)
       setNome('')
       setLoja('')
       nav(`/contagens/${c.id}`)

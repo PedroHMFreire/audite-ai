@@ -414,15 +414,15 @@ export async function getCounts(
   status: 'ativas' | 'em_andamento' | 'finalizada' | 'reaberta' | 'arquivada' = 'ativas'
 ) {
   const user_id = await getCurrentUserId()
-  
+
   let q = supabase
     .from('counts')
-    .select('*')
+    .select('*, stores(name)')
     .eq('user_id', user_id)
     // Índice: idx_counts_user_created (user_id, created_at DESC)
     .order('created_at', { ascending: false })
     .range(from, from + limit - 1)
-  
+
   if (status === 'ativas') {
     q = q.neq('status', 'arquivada')
   } else if (status === 'reaberta') {
@@ -433,10 +433,10 @@ export async function getCounts(
 
   const trimmedSearch = search.trim()
   if (trimmedSearch) q = q.ilike('nome', `%${trimmedSearch}%`)
-  
+
   const { data, error } = await q
   if (error) throw error
-  return data as Count[]
+  return data as (Count & { stores: { name: string } | null })[]
 }
 
 export async function updateCountName(count_id: string, nome: string) {
@@ -508,6 +508,18 @@ export async function getStoreById(id: string) {
   const { data, error } = await supabase.from('stores').select('name').eq('id', id).single()
   if (error) throw error
   return data?.name || null
+}
+
+/** Nomes de lojas usadas mais recentemente pelo usuário, sem repetição. */
+export async function getRecentStoreNames(limit = 5): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('stores')
+    .select('name')
+    .order('created_at', { ascending: false })
+    .limit(limit * 4)
+  if (error) throw error
+  const unique = Array.from(new Set((data || []).map(d => d.name).filter(Boolean)))
+  return unique.slice(0, limit)
 }
 
 export async function getPlanItems(count_id: string) {
@@ -636,6 +648,61 @@ export async function getTotalsLastCounts(limit = 5) {
     out.push({ name: c.nome, ...totals })
   }
   return out
+}
+
+export type StorePerformanceRow = {
+  count_id: string
+  store_name: string
+  created_at: string
+  regular: number
+  excesso: number
+  falta: number
+}
+
+/**
+ * Agrega os resultados das contagens mais recentes por loja (via `store_id`),
+ * para os cards de performance do dashboard.
+ */
+export async function getStorePerformanceData(limit = 100): Promise<StorePerformanceRow[]> {
+  const { data: counts, error } = await supabase
+    .from('counts')
+    .select('id, created_at, stores(name)')
+    .not('store_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  if (!counts || counts.length === 0) return []
+
+  const countIds = counts.map(c => c.id)
+  const { data: results, error: rErr } = await supabase
+    .from('results')
+    .select('count_id, status, manual_qtd, saldo_qtd')
+    .in('count_id', countIds)
+  if (rErr) throw rErr
+
+  const byCount = new Map<string, { regular: number; excesso: number; falta: number }>()
+  for (const r of results || []) {
+    const manualQty = Number(r.manual_qtd) || 0
+    const expectedQty = Number(r.saldo_qtd) || 0
+    const diferenca = Math.abs(expectedQty - manualQty)
+    const totals = byCount.get(r.count_id) || { regular: 0, excesso: 0, falta: 0 }
+    if (r.status === 'regular') totals.regular += expectedQty
+    else if (r.status === 'excesso') totals.excesso += diferenca
+    else if (r.status === 'falta') totals.falta += diferenca
+    byCount.set(r.count_id, totals)
+  }
+
+  return counts
+    .filter((c: any) => c.stores?.name)
+    .map((c: any) => {
+      const totals = byCount.get(c.id) || { regular: 0, excesso: 0, falta: 0 }
+      return {
+        count_id: c.id,
+        store_name: c.stores.name as string,
+        created_at: c.created_at,
+        ...totals
+      }
+    })
 }
 
 // ===============================================

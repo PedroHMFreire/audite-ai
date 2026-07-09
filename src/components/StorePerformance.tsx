@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, AlertCircle } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
+import { getStorePerformanceData } from '@/lib/db'
 
 type StoreData = {
   loja: string
@@ -22,48 +22,39 @@ export default function StorePerformance() {
   async function loadStorePerformance() {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('counts')
-        .select('loja, Regular, Excesso, Falta, created_at')
-        .order('created_at', { ascending: false })
-        .limit(100)
+      const data = await getStorePerformanceData(100)
 
-      if (!error && data) {
-        const grouped = new Map<string, any[]>()
+      const grouped = new Map<string, typeof data>()
+      data.forEach(item => {
+        if (!grouped.has(item.store_name)) grouped.set(item.store_name, [])
+        grouped.get(item.store_name)!.push(item)
+      })
 
-        data.forEach(item => {
-          if (item.loja) {
-            if (!grouped.has(item.loja)) grouped.set(item.loja, [])
-            grouped.get(item.loja)!.push(item)
+      const storeStats: StoreData[] = Array.from(grouped.entries())
+        .map(([loja, items]) => {
+          const avgRegular = items.reduce((s, i) => s + i.regular, 0) / items.length
+          const avgExcesso = items.reduce((s, i) => s + i.excesso, 0) / items.length
+          const avgFalta = items.reduce((s, i) => s + i.falta, 0) / items.length
+
+          // Calcula trend comparando primeira metade com segunda metade
+          const mid = Math.floor(items.length / 2)
+          const firstHalf = items.slice(0, mid).reduce((s, i) => s + i.falta, 0) / Math.max(mid, 1)
+          const secondHalf = items.slice(mid).reduce((s, i) => s + i.falta, 0) / Math.max(items.length - mid, 1)
+          const trendValue: 'up' | 'down' | 'stable' = firstHalf > secondHalf ? 'down' : firstHalf < secondHalf ? 'up' : 'stable'
+
+          return {
+            loja,
+            totalCounts: items.length,
+            avgRegular,
+            avgExcesso,
+            avgFalta,
+            trend: trendValue
           }
         })
+        .sort((a, b) => b.avgFalta - a.avgFalta)
+        .slice(0, 6)
 
-        const storeStats: StoreData[] = Array.from(grouped.entries())
-          .map(([loja, items]) => {
-            const avgRegular = items.reduce((s, i) => s + (i.Regular || 0), 0) / items.length
-            const avgExcesso = items.reduce((s, i) => s + (i.Excesso || 0), 0) / items.length
-            const avgFalta = items.reduce((s, i) => s + (i.Falta || 0), 0) / items.length
-
-            // Calcula trend comparando primeira metade com segunda metade
-            const mid = Math.floor(items.length / 2)
-            const firstHalf = items.slice(0, mid).reduce((s, i) => s + (i.Falta || 0), 0) / Math.max(mid, 1)
-            const secondHalf = items.slice(mid).reduce((s, i) => s + (i.Falta || 0), 0) / Math.max(items.length - mid, 1)
-            const trendValue: 'up' | 'down' | 'stable' = firstHalf > secondHalf ? 'down' : firstHalf < secondHalf ? 'up' : 'stable'
-
-            return {
-              loja,
-              totalCounts: items.length,
-              avgRegular,
-              avgExcesso,
-              avgFalta,
-              trend: trendValue
-            }
-          })
-          .sort((a, b) => b.avgFalta - a.avgFalta)
-          .slice(0, 6)
-
-        setStores(storeStats)
-      }
+      setStores(storeStats)
     } finally {
       setLoading(false)
     }

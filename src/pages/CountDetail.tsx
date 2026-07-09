@@ -11,6 +11,7 @@ import {
   computeAndSaveResults,
   getCountById,
   getPlanItems,
+  getStoreById,
   listManualEntries,
   replacePlanItems,
   setManualEntryQty,
@@ -33,6 +34,7 @@ export default function CountDetail() {
   const nav = useNavigate()
   const { addToast } = useToast()
   const [count, setCount] = useState<Count | null>(null)
+  const [storeName, setStoreName] = useState<string | null>(null)
   const [plan, setPlan] = useState<PlanRow[]>([])
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
@@ -126,6 +128,9 @@ export default function CountDetail() {
         setCount(countData)
         setPlan(planData)
         setEntries(entriesData.map(e => ({ id: e.id, codigo: e.codigo, qty: e.qty })))
+        if (countData.store_id) {
+          getStoreById(countData.store_id).then(name => { if (!cancelled) setStoreName(name) }).catch(() => {})
+        }
       } catch (err) {
         if (cancelled) return
         const message = err instanceof Error ? err.message : 'Erro ao carregar dados'
@@ -405,7 +410,10 @@ export default function CountDetail() {
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold truncate">{count?.nome || '...'}</h1>
+          <h1 className="text-xl font-semibold truncate">
+            {count?.nome || '...'}
+            {storeName && <span className="text-zinc-500 dark:text-zinc-400 font-normal"> • {storeName}</span>}
+          </h1>
           <div className="mt-0.5"><SyncStatus countId={id!} /></div>
         </div>
         {canViewReport && <Link to={`/relatorio/${id}`} className="badge badge-primary flex-shrink-0">Ver relatório</Link>}

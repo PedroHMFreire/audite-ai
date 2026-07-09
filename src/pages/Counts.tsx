@@ -7,6 +7,8 @@ import {
   updateCountName,
   type Count
 } from '@/lib/db'
+
+type CountWithStore = Count & { stores: { name: string } | null }
 import { SkeletonLoader } from '@/components/SkeletonLoader'
 import { EmptyState } from '@/components/EmptyState'
 import { EmptyCountsIllustration } from '@/components/illustrations/EmptyCountsIllustration'
@@ -17,7 +19,7 @@ type StatusFilter = 'ativas' | 'em_andamento' | 'finalizada' | 'reaberta' | 'arq
 const PAGE_SIZE = 10
 
 export default function Counts() {
-  const [items, setItems] = useState<Count[]>([])
+  const [items, setItems] = useState<CountWithStore[]>([])
   const [from, setFrom] = useState(0)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
@@ -90,7 +92,7 @@ export default function Counts() {
     setActionId(count.id)
     try {
       const updated = await updateCountName(count.id, nextName)
-      setItems(prev => prev.map(item => item.id === count.id ? updated : item))
+      setItems(prev => prev.map(item => item.id === count.id ? { ...item, ...updated } : item))
       addToast({ type: 'success', message: 'Contagem renomeada', duration: 2000 })
       setEditingId(null)
     } catch (err) {
@@ -108,7 +110,7 @@ export default function Counts() {
     try {
       const updated = await archiveCount(count.id)
       if (statusFilter === 'arquivada') {
-        setItems(prev => prev.map(item => item.id === count.id ? updated : item))
+        setItems(prev => prev.map(item => item.id === count.id ? { ...item, ...updated } : item))
       } else {
         setItems(prev => prev.filter(item => item.id !== count.id))
       }
@@ -221,6 +223,9 @@ export default function Counts() {
                     ) : (
                       <>
                         <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{it.nome}</div>
+                        {it.stores?.name && (
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">📍 {it.stores.name}</div>
+                        )}
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">{new Date(it.created_at).toLocaleString()}</div>
                       </>
                     )}
