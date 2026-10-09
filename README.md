@@ -1,291 +1,127 @@
-# Audite AI - Sistema de Auditoria de Estoque
+# Audite
 
-Sistema profissional para gestão e auditoria de estoque com cronograma automatizado, categorização avançada e relatórios inteligentes.
+Contagem de estoque para lojas de moda. O lojista importa a planilha do estoque,
+bipa as peças com a câmera do celular e recebe o relatório do que falta e do que
+sobra.
 
-## 🚀 Características Principais
+Aplicativo web (React + Vite + Tailwind) sobre Supabase (Postgres, autenticação
+e Edge Functions). Cobrança por assinatura via Stripe.
 
-### 📊 **Gestão de Contagens**
-- Upload de planilhas (Excel/CSV) com análise automática
-- Entrada manual de contagens com validação
-- Comparação automática entre estoque teórico vs. contado
-- Identificação de divergências (excessos/faltas)
+## O que o produto faz
 
-### 🏷️ **Sistema de Categorias**
-- Categorização flexível de produtos
-- Cronograma automático com distribuição round-robin
-- Configuração de períodos de contagem personalizados
-- Calendário visual estilo Google Calendar
+- Contagens com planilha do estoque (Excel ou CSV: código, nome, saldo).
+- Leitura de código de barras pela câmera, ou digitação / leitor USB.
+- Funciona sem internet durante a contagem e envia quando a conexão volta.
+- Relatório de faltas, sobras e certos, com motivo por divergência, em PDF e Excel.
+- Cronograma: categorias distribuídas pelas semanas, com início da contagem pelo calendário.
+- Catálogo de produtos opcional, para mostrar o nome de códigos fora da planilha.
+- Teste grátis de 7 dias e plano único mensal.
+- Conta: dados da loja, senha, download dos próprios dados e exclusão da conta.
 
-### 📈 **Relatórios e Analytics**
-- Relatórios detalhados em PDF
-- Exportação para Excel
-- Gráficos interativos de divergências
-- Histórico completo de contagens
+## Rodar localmente
 
-### 🎯 **Sistema Comercial**
-- Landing page profissional
-- Teste gratuito de 7 dias
-- Múltiplos planos de assinatura
-- Sistema de trial management
-
-## 💰 Planos e Preços
-
-### Básico - R$ 29/mês
-- Até 50 categorias
-- 100 contagens/mês
-- 1 usuário
-- Relatórios básicos
-
-### Profissional - R$ 59/mês
-- Categorias ilimitadas
-- Contagens ilimitadas
-- Até 3 usuários
-- Cronograma automático
-- Relatórios avançados
-
-### Premium - R$ 99/mês
-- Tudo do Profissional
-- Usuários ilimitados
-- Múltiplas lojas
-- API de integração
-- Suporte 24/7
-
-## 🛠️ Tecnologias
-
-### Frontend
-- **React 18** com TypeScript
-- **Vite** para build otimizado
-- **Tailwind CSS** para estilização
-- **React Router** para navegação
-- **Lucide React** para ícones
-- **Recharts** para gráficos
-
-### Backend
-- **Supabase** (PostgreSQL + Auth)
-- **Row Level Security (RLS)** para multi-tenant
-- **Triggers automáticos** para perfis de usuário
-- **Real-time subscriptions**
-
-### Bibliotecas
-- **jsPDF** para geração de relatórios
-- **xlsx** para manipulação de planilhas
-- **React Hook Form** para formulários
-- **Sistema de Toast** personalizado
-
-## 🚀 Instalação e Desenvolvimento
-
-### Pré-requisitos
-- Node.js 18+
-- npm ou yarn
-- Conta no Supabase
-
-### Setup Local
+Pré-requisitos: Node 22+, Docker e a [Supabase CLI](https://supabase.com/docs/guides/cli).
 
 ```bash
-# Clone o repositório
-git clone <repository-url>
-cd audite-ai
-
-# Instale dependências
 npm install
-
-# Configure variáveis de ambiente
-cp .env.example .env.local
-
-# Configure Supabase
-# Adicione suas chaves do Supabase no .env.local:
-# VITE_SUPABASE_URL=your_supabase_url
-# VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-
-# Execute o banco de dados
-# Aplique o schema.sql no seu projeto Supabase
-
-# Inicie o servidor de desenvolvimento
-npm run dev
+supabase start                       # banco, autenticação e funções locais (portas 55xxx)
+supabase status -o env               # mostra API_URL e ANON_KEY locais
 ```
 
-### Configuração do Supabase
-
-1. Crie um novo projeto no Supabase
-2. Execute o script `supabase/schema.sql` no SQL Editor
-3. Configure as políticas RLS
-4. Configure authentication providers
-5. Adicione as chaves no arquivo `.env.local`
-
-## 📁 Estrutura do Projeto
+Crie `.env.localdb` com esses dois valores:
 
 ```
-src/
-├── components/          # Componentes reutilizáveis
-│   ├── Charts.tsx      # Gráficos de divergências
-│   ├── DashboardCards.tsx
-│   ├── FileUpload.tsx  # Upload de planilhas
-│   ├── Header.tsx      # Navegação + trial status
-│   ├── Footer.tsx
-│   ├── Logo.tsx
-│   ├── ManualEntry.tsx # Entrada manual
-│   ├── ThemeToggle.tsx # Dark/Light mode
-│   └── Toast.tsx       # Sistema de notificações
-├── pages/              # Páginas da aplicação
-│   ├── Home.tsx        # Dashboard principal
-│   ├── Login.tsx       # Autenticação
-│   ├── Counts.tsx      # Lista de contagens
-│   ├── CountDetail.tsx # Detalhes da contagem
-│   ├── Report.tsx      # Visualização de relatórios
-│   ├── Categories.tsx  # Gestão de categorias
-│   ├── ScheduleConfig.tsx    # Configuração cronograma
-│   ├── ScheduleCalendar.tsx  # Calendário visual
-│   ├── LandingPage.tsx       # Página comercial
-│   ├── TrialSignup.tsx       # Cadastro trial
-│   └── TrialWelcome.tsx      # Boas-vindas trial
-├── lib/                # Utilitários e serviços
-│   ├── supabaseClient.ts     # Cliente Supabase
-│   ├── db.ts                 # Operações banco
-│   ├── pdf.ts                # Geração PDF
-│   ├── trial.ts              # Gestão trial
-│   └── utils.ts              # Funções utilitárias
-└── styles.css          # Estilos globais
+VITE_SUPABASE_URL=http://127.0.0.1:55321
+VITE_SUPABASE_ANON_KEY=<ANON_KEY local>
 ```
 
-## 🔐 Segurança e Multi-tenant
-
-### Row Level Security (RLS)
-- Todas as tabelas protegidas por RLS
-- Usuários veem apenas seus próprios dados
-- Políticas automáticas por user_id
-
-### Gestão de Trial
-- Perfis automáticos na criação de usuário
-- Tracking de status de trial
-- Validação de datas de expiração
-- Sistema de upgrade automático
-
-## 🎯 Fluxo do Usuário
-
-### 1. Landing Page
-- Apresentação do produto
-- Pricing transparente
-- CTA para trial gratuito
-- Depoimentos e funcionalidades
-
-### 2. Trial Signup
-- Formulário com dados da loja
-- Seleção de plano
-- Criação automática de conta
-- Email de confirmação
-
-### 3. Onboarding
-- Página de boas-vindas
-- Instruções de primeiro uso
-- Links para configuração
-- Status do trial
-
-### 4. Aplicação Principal
-- Dashboard com métricas
-- Upload de planilhas
-- Gestão de categorias
-- Relatórios e cronograma
-
-## 📊 Funcionalidades Avançadas
-
-### Cronograma Automático
-- Algoritmo round-robin para distribuição
-- Configuração flexível de períodos
-- Prevenção de duplicatas mensais
-- Calendário visual interativo
-
-### Sistema de Relatórios
-- PDF com logo e informações completas
-- Excel exportável com fórmulas
-- Gráficos de divergências
-- Histórico temporal
-
-### Analytics
-- Métricas de uso por categoria
-- Tendências de divergências
-- Performance de contagens
-- Insights automáticos
-
-## 🔄 Deploy e Produção
-
-### Build para Produção
 ```bash
-npm run build
+npm run dev:local                    # http://localhost:5180, usando o banco local
 ```
 
-### Variáveis de Ambiente
-```env
-VITE_SUPABASE_URL=your_production_supabase_url
-VITE_SUPABASE_ANON_KEY=your_production_supabase_anon_key
+`npm run dev` usa o `.env`, que aponta para o projeto Supabase de produção.
+
+Para virar administrador de uma conta (libera Conta → Administração):
+
+```sql
+update public.user_roles set role = 'admin'
+where user_id = (select id from auth.users where email = 'voce@exemplo.com');
 ```
 
-### Checklist de Deploy
-- [ ] Supabase configurado em produção
-- [ ] RLS policies aplicadas
-- [ ] Auth providers configurados
-- [ ] Domínio personalizado
-- [ ] SSL/HTTPS habilitado
-- [ ] Backup automático
-- [ ] Monitoring configurado
+## Testes
 
-## 🤝 Contribuição
+```bash
+npm test             # unitários: planilhas, datas do cronograma, lógica de cobrança
+npm run test:db      # regras de acesso do banco e funções do Stripe (exige supabase start)
+npm run test:e2e     # navegador de ponta a ponta + acessibilidade
+npm run test:all
+```
 
-1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
-5. Abra um Pull Request
+Os testes de banco e de navegador rodam só contra o Supabase local e recusam
+qualquer outro endereço.
 
-## 📝 Licença
+Preparação para `test:db` e `test:e2e`:
 
-Este projeto está sob licença MIT. Veja o arquivo LICENSE para detalhes.
+```bash
+printf 'STRIPE_WEBHOOK_SECRET=whsec_local_test_only\nSITE_URL=http://localhost:5180\n' > /tmp/functions.env
+supabase functions serve --env-file /tmp/functions.env &
+npx vite build --mode localdb --outDir dist-e2e
+node tests/serve-dist.mjs dist-e2e 4180 &
+```
 
-## 📞 Suporte
+`tests/serve-dist.mjs` serve o build com os mesmos cabeçalhos de segurança do
+deploy, então a política de conteúdo (CSP) é testada de verdade.
 
-- Email: suporte@audite-ai.com
-- WhatsApp: (11) 9999-9999
-- Documentação: docs.audite-ai.com
+`tests/migration-upgrade.sh` ensaia a subida das migrações sobre um banco que
+já tem dados e confere que nada se perde. Ele recria o banco local.
 
----
+## Banco de dados
 
-**Audite AI** - Transformando a gestão de estoque com tecnologia e inteligência. 🚀
+- `supabase/migrations/` — fonte da verdade. A primeira migração é um baseline
+  do schema de produção em 08/10/2026.
+- `supabase/migrations_legacy/` — migrações e scripts antigos, só como histórico.
+- `supabase/functions/` — funções do Stripe (`stripe-checkout`, `stripe-portal`,
+  `stripe-webhook`).
 
-## Como rodar
+Fluxo para mudar o schema:
 
-1. Clone/extraia o projeto e entre na pasta.
-2. Crie o arquivo `.env` na raiz com:
-   ```env
-   VITE_SUPABASE_URL=xxxx
-   VITE_SUPABASE_ANON_KEY=xxxx
-   ```
-3. Instale dependências e rode:
-   ```bash
-   npm install
-   npm run dev
-   ```
+```bash
+supabase migration new nome_da_mudanca   # escreva o SQL
+supabase migration up --local            # aplica no banco local
+npm run test:db                          # confere as regras de acesso
+tests/migration-upgrade.sh               # ensaia sobre dados existentes
+supabase db push --dry-run               # mostra o que iria para produção
+supabase db push                         # aplica em produção
+```
 
-> **Importante:** configure seu banco Supabase com as tabelas e políticas abaixo (arquivo `supabase/schema.sql`).
+As credenciais da CLI ficam em `.env.local` (`SUPABASE_ACCESS_TOKEN`,
+`SUPABASE_DB_PASSWORD`), que não é versionado: `set -a; . ./.env.local; set +a`.
 
-## Fluxo
-- Envie planilha (colunas **código, nome, saldo**).
-- Insira manualmente os códigos encontrados no estoque físico (um Enter por item).
-- Finalize a contagem → o sistema classifica itens em **Regulares**, **Excesso** e **Falta** e gera **Relatório** (web + PDF).
+## Segurança
 
-## Estrutura
-- **Login** (e-mail/senha com Supabase Auth)
-- **Home** (dashboards, iniciar contagem, últimas 5)
-- **Contagens** (lista com busca e carregar mais)
-- **Detalhe da contagem** (upload + inserção manual + finalizar)
-- **Relatório** (visual + exportar PDF)
-- **Tema claro/escuro** com alternância no topo
+- Cada tabela tem Row Level Security: um cliente só lê e altera os próprios dados.
+- Visitante sem login não tem permissão em nenhuma tabela.
+- Teste e assinatura ficam na tabela `subscriptions`, que o navegador só lê.
+  Sem acesso ativo o cliente consulta e exporta, mas o banco recusa criar ou
+  editar contagens.
+- Chaves do Stripe ficam apenas nos segredos do Supabase.
+- Cabeçalhos de segurança (CSP, HSTS, frame-options) em `vercel.json`.
+- Variáveis `VITE_*` são públicas: nunca coloque segredo nelas.
 
-## Observações
-- Classificação segue fielmente sua especificação:
-  - **Regular**: aparece na planilha e quantidade inserida **igual** ao saldo.
-  - **Excesso**: inserido manualmente, **não** existe na planilha.
-  - **Falta**: existe na planilha e **zero** inserções do código.
-  - Casos parciais (**inserções > 0 e < saldo**) não são classificados (poderemos adicionar depois).
-- Opcional: criar um bucket **reports** no Supabase Storage para guardar PDFs; o app já baixa localmente.
+## Deploy
 
-## Licença
-MIT
+Site estático: `npm run build` gera `dist/`. Variáveis no provedor de hospedagem:
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` e, opcionalmente,
+`VITE_PLAN_PRICE_LABEL` e `VITE_SUPPORT_EMAIL`.
+
+Em outro provedor que não a Vercel, replique os cabeçalhos de `vercel.json` e a
+regra que devolve `index.html` para qualquer rota.
+
+No Supabase (Authentication → URL Configuration), o Site URL deve ser o domínio
+do app e as Redirect URLs devem incluir `https://SEU-DOMINIO/**`.
+
+## Documentos
+
+- [docs/PLANO_LANCAMENTO.md](docs/PLANO_LANCAMENTO.md) — plano, estado e pendências.
+- [docs/ATIVAR_COBRANCA_STRIPE.md](docs/ATIVAR_COBRANCA_STRIPE.md) — passo a passo da cobrança.
+- [docs/arquivo/](docs/arquivo/) — documentos antigos.

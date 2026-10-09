@@ -51,6 +51,10 @@ export function authErrorMessage(err: unknown): string {
   if (/rate limit|too many/i.test(msg)) return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.'
   if (/password should be|weak password/i.test(msg)) return 'Escolha uma senha mais forte, com pelo menos 8 caracteres.'
   if (/same password|different from the old/i.test(msg)) return 'A nova senha precisa ser diferente da atual.'
+  if (/security purposes|only request this after/i.test(msg)) return 'Aguarde alguns segundos antes de tentar de novo.'
+  if (/signups? not allowed|signup is disabled/i.test(msg)) return 'O cadastro está temporariamente indisponível.'
+  if (/invalid email|unable to validate email/i.test(msg)) return 'Informe um e-mail válido.'
   if (/failed to fetch|network/i.test(msg)) return 'Sem conexão. Verifique sua internet e tente de novo.'
-  return msg || 'Algo deu errado. Tente novamente.'
+  // Mensagens do servidor vêm em inglês; melhor uma frase genérica do que texto que o lojista não entende.
+  return 'Algo deu errado. Tente novamente em instantes.'
 }

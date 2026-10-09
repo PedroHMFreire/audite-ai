@@ -34,7 +34,7 @@ export default function ConfirmFinalizationModal({
           </div>
           <div className="flex justify-between px-3 py-2.5">
             <dt className="text-zinc-500">Peças contadas</dt>
-            <dd className="tabular font-medium">{n(insertedItems)} <span className="font-normal text-zinc-400">de {n(planItems)}</span></dd>
+            <dd className="tabular font-medium">{n(insertedItems)} <span className="font-normal text-zinc-500">de {n(planItems)}</span></dd>
           </div>
           <div className="flex justify-between px-3 py-2.5">
             <dt className="text-zinc-500">Produtos não contados</dt>

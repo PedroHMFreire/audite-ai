@@ -185,7 +185,7 @@ export default function Report() {
             >
               <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} aria-hidden="true" />
               {t.label}
-              <span className="tabular text-zinc-400">{groups[t.key].length}</span>
+              <span className="tabular text-zinc-500">{groups[t.key].length}</span>
             </button>
           ))}
         </div>
@@ -213,7 +213,7 @@ export default function Report() {
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="tabular text-sm">
-                        {r.manual_qtd} <span className="text-zinc-400">de {r.saldo_qtd}</span>
+                        {r.manual_qtd} <span className="text-zinc-500">de {r.saldo_qtd}</span>
                       </p>
                       <p className={`tabular text-xs font-medium ${diff === 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                         {diff === 0 ? 'Certo' : diff < 0 ? `Falta ${-diff}` : `Sobra ${diff}`}

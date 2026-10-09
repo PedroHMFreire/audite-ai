@@ -12,7 +12,7 @@ const STEPS: [string, string][] = [
 const FAQ: [string, string][] = [
   ['Preciso de leitor de código de barras?', 'Não. A câmera do celular faz a leitura. Se preferir, também dá para digitar os códigos ou usar um leitor que você já tenha.'],
   ['Funciona com o meu sistema de loja?', 'O Audite não se conecta ao seu sistema. Ele trabalha com a planilha de estoque que praticamente todo sistema exporta, em Excel ou CSV.'],
-  ['E se eu não tiver planilha?', 'Você pode contar mesmo assim. O Audite registra tudo o que foi bipado e gera a lista com as quantidades.'],
+  ['Que planilha eu preciso ter?', 'Uma exportação do estoque com três colunas: código, nome do produto e saldo. É com ela que o Audite compara o que você contou.'],
   ['O que acontece quando o teste acaba?', 'Suas contagens e relatórios continuam disponíveis para consulta. Para fazer novas contagens, é só assinar.'],
   ['Posso cancelar quando quiser?', 'Sim, direto na tela de assinatura, sem multa. O acesso segue até o fim do mês já pago.'],
 ]
@@ -95,7 +95,7 @@ export default function Landing() {
               <details key={q} className="group py-5">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-6 text-lg font-medium marker:hidden">
                   {q}
-                  <span className="text-2xl font-light text-zinc-400 transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+                  <span className="text-2xl font-light text-zinc-500 transition-transform group-open:rotate-45" aria-hidden="true">+</span>
                 </summary>
                 <p className="mt-3 max-w-2xl leading-relaxed text-zinc-600">{a}</p>
               </details>
@@ -150,10 +150,10 @@ function ProductPreview() {
               <li key={codigo} className="flex items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{nome}</p>
-                  <p className="tabular font-mono text-[11px] text-zinc-400">{codigo}</p>
+                  <p className="tabular font-mono text-[11px] text-zinc-500">{codigo}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="tabular text-sm">{contado} <span className="text-zinc-400">de {sistema}</span></p>
+                  <p className="tabular text-sm">{contado} <span className="text-zinc-500">de {sistema}</span></p>
                   <p className={`text-[11px] font-medium ${diff === 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                     {diff === 0 ? 'Certo' : diff < 0 ? `Falta ${-diff}` : `Sobra ${diff}`}
                   </p>

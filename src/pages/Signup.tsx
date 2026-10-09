@@ -87,7 +87,7 @@ export default function Signup() {
             className="input" value={storeName} onChange={(e) => setStoreName(e.target.value)} />
         </div>
         <div>
-          <label htmlFor="name" className="label">Seu nome <span className="font-normal text-zinc-400">(opcional)</span></label>
+          <label htmlFor="name" className="label">Seu nome <span className="font-normal text-zinc-500">(opcional)</span></label>
           <input id="name" type="text" autoComplete="name" maxLength={100}
             className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
         </div>

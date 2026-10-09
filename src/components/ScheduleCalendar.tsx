@@ -150,7 +150,7 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
             return (
               <div key={key} className={`min-h-24 border-b border-r border-zinc-200 p-1.5 ${i % 7 === 6 ? 'border-r-0' : ''} ${inMonth ? '' : 'bg-zinc-50'}`}>
                 <div className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs tabular ${
-                  key === today ? 'bg-ink font-medium text-white' : inMonth ? 'text-zinc-700' : 'text-zinc-400'
+                  key === today ? 'bg-ink font-medium text-white' : inMonth ? 'text-zinc-700' : 'text-zinc-500'
                 }`}>
                   {date.getDate()}
                 </div>
@@ -180,7 +180,7 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
                       <span className="text-[11px] uppercase text-zinc-500">{WEEKDAYS[(date.getDay() + 6) % 7]}</span>
                     </span>
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.category.color }} aria-hidden="true" />
-                    <span className={`min-w-0 flex-1 truncate text-sm ${isDone(item) || item.status === 'skipped' ? 'text-zinc-400 line-through' : ''}`}>{item.category.name}</span>
+                    <span className={`min-w-0 flex-1 truncate text-sm ${isDone(item) || item.status === 'skipped' ? 'text-zinc-500 line-through' : ''}`}>{item.category.name}</span>
                     <span className={`shrink-0 text-xs ${late ? 'font-medium text-red-600' : 'text-zinc-500'}`}>
                       {isDone(item) ? 'Feita' : item.status === 'skipped' ? 'Pulada' : late ? 'Atrasada' : item.scheduled_date === today ? 'Hoje' : ''}
                     </span>
@@ -249,7 +249,7 @@ function Pill({ item, today, onClick }: { item: Item; today: string; onClick: ()
       }`}
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: item.category.color }} aria-hidden="true" />
-      <span className={`min-w-0 flex-1 truncate ${done || item.status === 'skipped' ? 'text-zinc-400 line-through' : ''}`}>{item.category.name}</span>
+      <span className={`min-w-0 flex-1 truncate ${done || item.status === 'skipped' ? 'text-zinc-500 line-through' : ''}`}>{item.category.name}</span>
       {done && <Check className="h-3 w-3 shrink-0 text-green-600" aria-label="Feita" />}
     </button>
   )

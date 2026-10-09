@@ -175,7 +175,7 @@ export default function Catalog() {
               {items.map((item) => (
                 <li key={item.id} className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{item.nome || <span className="font-normal italic text-zinc-400">Sem nome</span>}</p>
+                    <p className="truncate text-sm font-medium">{item.nome || <span className="font-normal italic text-zinc-500">Sem nome</span>}</p>
                     <p className="tabular truncate font-mono text-xs text-zinc-500">{item.codigo}</p>
                   </div>
                   {canEdit && (

@@ -230,7 +230,7 @@ export default function ScheduleConfig() {
             className="card w-full max-w-lg my-8 max-h-[90vh] overflow-y-auto space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Novo cronograma</h3>
-              <button type="button" onClick={() => setShowCreateForm(false)} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">✕</button>
+              <button type="button" onClick={() => setShowCreateForm(false)} className="text-zinc-500 hover:text-zinc-600 text-lg leading-none">✕</button>
             </div>
 
             <div>

@@ -1,8 +1,8 @@
 import { SUPPORT_EMAIL } from '@/lib/plan'
 
 const FAQ: [string, string][] = [
-  ['Como começo uma contagem?', 'No Início, dê um nome e toque em Começar. Depois, se quiser comparar com o sistema, importe a planilha do estoque e comece a bipar as peças.'],
-  ['Que planilha eu preciso importar?', 'Uma exportação do seu sistema de estoque em Excel (.xlsx) ou CSV com três colunas: código, nome do produto e saldo. A importação é opcional: sem planilha, o Audite apenas registra o que você contou.'],
+  ['Como começo uma contagem?', 'No Início, dê um nome e toque em Começar. Importe a planilha do estoque e comece a bipar as peças. Ao terminar, toque em Finalizar para ver o relatório.'],
+  ['Que planilha eu preciso importar?', 'Uma exportação do seu sistema de estoque em Excel (.xlsx) ou CSV com três colunas, nesta ordem: código, nome do produto e saldo. A primeira linha pode ser o cabeçalho. Você pode bipar antes de importar, mas a planilha é necessária para finalizar e gerar o relatório.'],
   ['Posso contar sem internet?', 'Sim. Abra a contagem com internet e, se o sinal cair, continue bipando: os itens ficam guardados no aparelho e são enviados quando a conexão voltar.'],
   ['O leitor de código de barras não abre a câmera.', 'O navegador precisa de permissão para usar a câmera. Toque no cadeado ao lado do endereço do site, libere a câmera e recarregue a página. Você também pode digitar o código.'],
   ['Como leio o relatório?', '“Certos” são as peças em que o contado bate com o sistema. “Faltas” são peças que o sistema diz ter e você não encontrou. “Sobras” são peças encontradas a mais. Você pode anotar o motivo de cada divergência e exportar em PDF ou Excel.'],
@@ -23,7 +23,7 @@ export default function Help() {
           <details key={q} className="group px-5 py-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium marker:hidden">
               {q}
-              <span className="text-zinc-400 transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+              <span className="text-zinc-500 transition-transform group-open:rotate-45" aria-hidden="true">+</span>
             </summary>
             <p className="mt-2 text-sm leading-relaxed text-zinc-600">{a}</p>
           </details>

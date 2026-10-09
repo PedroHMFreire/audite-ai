@@ -162,7 +162,7 @@ function Stat({ label, value, dot }: { label: string; value: number; dot: string
 function FirstSteps() {
   const steps = [
     ['Crie uma contagem', 'Dê um nome, como “Balanço de outubro”.'],
-    ['Importe a planilha do estoque', 'Exporte do seu sistema em Excel ou CSV, com código, nome e saldo. É opcional.'],
+    ['Importe a planilha do estoque', 'Exporte do seu sistema em Excel ou CSV, com código, nome e saldo.'],
     ['Bipe as peças', 'Use a câmera do celular ou digite os códigos. Funciona até sem internet.'],
     ['Veja o que falta e o que sobra', 'O relatório compara o contado com o sistema e sai em PDF ou Excel.'],
   ]

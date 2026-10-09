@@ -465,7 +465,7 @@ export default function CountDetail() {
             <div>
               <div className="eyebrow">Produtos contados</div>
               <div className="text-2xl font-semibold">
-                {stats.contados}<span className="text-zinc-400 text-lg"> / {stats.totalPlano}</span>
+                {stats.contados}<span className="text-zinc-500 text-lg"> / {stats.totalPlano}</span>
               </div>
             </div>
             <div className="tabular text-3xl font-semibold">{progressPct}%</div>
@@ -552,11 +552,11 @@ export default function CountDetail() {
                   {nome || <span className="font-mono font-semibold">{entry.codigo}</span>}
                 </div>
                 {nome && (
-                  <div className="text-xs font-mono text-zinc-400 truncate">{entry.codigo}</div>
+                  <div className="text-xs font-mono text-zinc-500 truncate">{entry.codigo}</div>
                 )}
                 <div className="text-xs text-muted mt-0.5">
                   {entry.qty} un
-                  {entry.pending && <span className="ml-2 text-zinc-400">enviando…</span>}
+                  {entry.pending && <span className="ml-2 text-zinc-500">enviando…</span>}
                 </div>
               </div>
               {isEditable && (

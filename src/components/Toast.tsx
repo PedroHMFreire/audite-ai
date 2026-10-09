@@ -89,7 +89,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
       <button
         type="button"
         aria-label="Fechar aviso"
-        className="-mr-1 shrink-0 rounded p-1 text-zinc-400 hover:text-white"
+        className="-mr-1 shrink-0 rounded p-1 text-zinc-500 hover:text-white"
         onClick={() => onRemove(toast.id)}
       >
         ✕
