@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { dateForWeekDay, parseLocalDate, toLocalISODate } from './scheduleDates'
 import { InputValidator, SecurityLogger } from './security'
 import { enqueueEntry } from './offlineQueue'
 
@@ -1033,6 +1034,7 @@ export async function getAllScheduleItems(): Promise<ScheduleItem[]> {
   const { data, error } = await supabase
     .from('schedule_items')
     .select('*')
+    .is('archived_at', null)
     .order('scheduled_date')
   
   if (error) throw error
@@ -1227,7 +1229,7 @@ export async function generateSchedule(options: GenerateScheduleOptions): Promis
   const { configId, categories, sectorsPerWeek, startDate, totalWeeks, workDays } = options
   
   // Soft delete itens existentes do cronograma - marca como 'archived' em vez de deletar
-  await supabase
+  const { error: archiveError } = await supabase
     .from('schedule_items')
     .update({
       status: 'archived',
@@ -1235,6 +1237,7 @@ export async function generateSchedule(options: GenerateScheduleOptions): Promis
     })
     .eq('config_id', configId)
     .is('archived_at', null) // Só arquiva os que não foram já arquivados
+  if (archiveError) throw archiveError
   
   const schedule: Omit<ScheduleItem, 'id' | 'created_at' | 'updated_at'>[] = []
   const activeCategories = categories.filter(c => c.is_active)
@@ -1244,7 +1247,7 @@ export async function generateSchedule(options: GenerateScheduleOptions): Promis
   }
   
   // NOVA LÓGICA: Distribuição Round-Robin garantindo equidade
-  const startDateObj = new Date(startDate)
+  const startDateObj = parseLocalDate(startDate)
   let categoryIndex = 0
   
   for (let week = 1; week <= totalWeeks; week++) {
@@ -1262,12 +1265,12 @@ export async function generateSchedule(options: GenerateScheduleOptions): Promis
     
     // Cria itens do cronograma
     for (const { category, dayOfWeek } of scheduledDays) {
-      const scheduledDate = getDateForWeekDay(startDateObj, week - 1, dayOfWeek)
+      const scheduledDate = dateForWeekDay(startDateObj, week - 1, dayOfWeek)
       
       schedule.push({
         config_id: configId,
         category_id: category.id,
-        scheduled_date: formatDate(scheduledDate),
+        scheduled_date: toLocalISODate(scheduledDate),
         week_number: week,
         day_of_week: dayOfWeek,
         status: 'pending',
@@ -1318,27 +1321,6 @@ function distributeAcrossWorkDays(
   })
   
   return result
-}
-
-function getDateForWeekDay(startDate: Date, weekOffset: number, dayOfWeek: number): Date {
-  const targetDate = new Date(startDate)
-  
-  // Move para o início da semana alvo
-  targetDate.setDate(startDate.getDate() + (weekOffset * 7))
-  
-  // Ajusta para segunda-feira da semana
-  const currentDay = targetDate.getDay()
-  const daysToMonday = currentDay === 0 ? -6 : 1 - currentDay
-  targetDate.setDate(targetDate.getDate() + daysToMonday)
-  
-  // Move para o dia da semana desejado (1=seg, 2=ter, etc.)
-  targetDate.setDate(targetDate.getDate() + (dayOfWeek - 1))
-  
-  return targetDate
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0]
 }
 
 function shuffleArray<T>(array: T[]): void {

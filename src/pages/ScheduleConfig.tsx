@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useToast } from '@/components/Toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ScheduleCalendar from '@/components/ScheduleCalendar'
-import SchedulePredictiveWidget from '@/components/SchedulePredictiveWidget'
-import TemplateSelect from '@/components/TemplateSelect'
-import AnomalyAlerts from '@/components/AnomalyAlerts'
+import ScheduleTabs from '@/components/ScheduleTabs'
+import { Link } from 'react-router-dom'
 import {
   getCategories,
   getScheduleConfigs,
@@ -15,7 +14,6 @@ import {
   type Category,
   type ScheduleConfig
 } from '@/lib/db'
-import { type ScheduleTemplate } from '@/lib/scheduleTemplates'
 
 const WEEKDAYS = [
   { num: 1, short: 'Seg', full: 'Segunda' },
@@ -43,8 +41,6 @@ export default function ScheduleConfig() {
   const [regenConfig, setRegenConfig] = useState<ScheduleConfig | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const [showTemplateSelector, setShowTemplateSelector] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState<ScheduleTemplate | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -93,19 +89,6 @@ export default function ScheduleConfig() {
     return true
   }, [formData, categories, addToast])
 
-  const handleTemplateSelect = useCallback((config: Partial<ScheduleConfig>, template: ScheduleTemplate) => {
-    setFormData({
-      name: config.name || '',
-      description: config.description || '',
-      sectors_per_week: config.sectors_per_week || 4,
-      start_date: config.start_date || formData.start_date,
-      total_weeks: config.total_weeks || 4,
-      work_days: config.work_days || [1, 2, 3, 4, 5]
-    })
-    setSelectedTemplate(template)
-    setShowTemplateSelector(false)
-  }, [formData.start_date])
-
   const handleCreateAndGenerate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validateForm()) return
@@ -121,9 +104,8 @@ export default function ScheduleConfig() {
         is_active: true
       })
       await generateScheduleFromConfig(config.id)
-      addToast({ type: 'success', message: 'Cronograma gerado!', description: `${formData.total_weeks} semanas programadas` })
+      addToast({ type: 'success', message: 'Cronograma criado', description: `${formData.total_weeks} semanas programadas` })
       setFormData(prev => ({ name: '', description: '', sectors_per_week: 4, start_date: prev.start_date, total_weeks: 4, work_days: [1, 2, 3, 4, 5] }))
-      setSelectedTemplate(null)
       setShowCreateForm(false)
       await loadData()
       setCalendarRefresh(p => p + 1)
@@ -186,20 +168,24 @@ export default function ScheduleConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho + ação */}
+      <ScheduleTabs />
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Cronograma de contagens</h1>
-          <p className="text-sm text-muted">Acompanhe o ciclo e gere um novo cronograma quando precisar.</p>
+          <h1 className="page-title">Cronograma</h1>
+          <p className="page-subtitle">Distribua as categorias da loja ao longo das semanas e conte um pouco por vez.</p>
         </div>
-        <button className="btn flex-shrink-0 min-h-11" onClick={() => setShowCreateForm(true)}>+ Novo cronograma</button>
+        {categories.length > 0 && (
+          <button className="btn flex-shrink-0" onClick={() => setShowCreateForm(true)}>Novo cronograma</button>
+        )}
       </div>
 
-      {/* Dashboard / análises — destaque */}
-      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
-        <div className="lg:col-span-2"><SchedulePredictiveWidget /></div>
-        <AnomalyAlerts />
-      </div>
+      {categories.length === 0 && (
+        <div className="rounded-xl border border-dashed border-zinc-300 px-6 py-10 text-center">
+          <p className="font-medium">Comece cadastrando as categorias</p>
+          <p className="mt-1 text-sm text-zinc-500">Vestidos, calças, acessórios… O cronograma sorteia quais contar em cada semana.</p>
+          <Link to="/categorias" className="btn mt-5">Cadastrar categorias</Link>
+        </div>
+      )}
 
       {/* Calendário — visão principal */}
       <ScheduleCalendar refreshTrigger={calendarRefresh} />
@@ -248,39 +234,39 @@ export default function ScheduleConfig() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Nome</label>
-              <input className="input" value={formData.name} placeholder="Ex.: Cronograma Junho" autoFocus
+              <label className="label">Nome</label>
+              <input className="input" value={formData.name} placeholder="Ex.: Ciclo de outubro" autoFocus
                 onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} required />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Início</label>
+              <label className="label">Início</label>
               <input type="date" className="input" value={formData.start_date}
                 onChange={e => setFormData(p => ({ ...p, start_date: e.target.value }))} required />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Setores/semana</label>
+                <label className="label">Categorias por semana</label>
                 <input type="number" className="input" min={1} max={Math.min(10, categories.length || 10)} value={formData.sectors_per_week}
                   onChange={e => setFormData(p => ({ ...p, sectors_per_week: Math.min(Math.min(10, categories.length || 10), Math.max(1, parseInt(e.target.value) || 1)) }))} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Semanas</label>
+                <label className="label">Semanas</label>
                 <input type="number" className="input" min={1} max={52} value={formData.total_weeks}
                   onChange={e => setFormData(p => ({ ...p, total_weeks: Math.max(1, Math.min(52, parseInt(e.target.value) || 1)) }))} />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Dias da semana</label>
+              <label className="label">Dias da semana</label>
               <div className="flex flex-wrap gap-1.5">
                 {WEEKDAYS.map(({ num, short }) => {
                   const on = formData.work_days.includes(num)
                   return (
                     <button key={num} type="button" onClick={() => toggleWorkDay(num)}
                       className={`min-w-11 min-h-10 px-2 rounded-lg text-sm font-medium transition-colors ${
-                        on ? 'bg-primary-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                        on ? 'bg-ink text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                       }`}>{short}</button>
                   )
                 })}
@@ -294,33 +280,17 @@ export default function ScheduleConfig() {
             </p>
 
             <div className="flex flex-col gap-2">
-              <button type="submit" className="btn w-full min-h-11" disabled={generating || categories.length === 0}>
+              <button type="submit" className="btn w-full" disabled={generating || categories.length === 0}>
                 {generating ? 'Gerando…' : 'Gerar cronograma'}
-              </button>
-              <button type="button" onClick={() => setShowTemplateSelector(true)} className="btn-ghost w-full min-h-11 text-sm" disabled={generating}>
-                Usar um modelo pronto
               </button>
             </div>
 
             {categories.length === 0 && (
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                Nenhuma categoria cadastrada. <a href="/categorias" className="link">Cadastre categorias</a> para começar.
+                Nenhuma categoria cadastrada. <Link to="/categorias" className="link">Cadastre categorias</Link> para começar.
               </p>
             )}
           </form>
-        </div>
-      )}
-
-      {/* Modal: seletor de template (acima do form) */}
-      {showTemplateSelector && (
-        <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 overflow-y-auto" onClick={() => setShowTemplateSelector(false)}>
-          <div className="card w-full max-w-2xl my-8" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">Escolher um modelo</h3>
-              <button onClick={() => setShowTemplateSelector(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg leading-none">✕</button>
-            </div>
-            <TemplateSelect onSelect={handleTemplateSelect} selectedId={selectedTemplate?.id} loading={generating} />
-          </div>
         </div>
       )}
 
@@ -334,16 +304,16 @@ export default function ScheduleConfig() {
           >
             <h3 className="text-sm font-semibold">Editar cronograma</h3>
             <div>
-              <label className="block text-sm font-medium mb-1">Nome</label>
+              <label className="label">Nome</label>
               <input name="name" className="input" defaultValue={editingConfig.name} required />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Descrição</label>
+              <label className="label">Descrição</label>
               <textarea name="description" className="input resize-none" rows={3} defaultValue={editingConfig.description || ''} />
             </div>
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <button type="button" className="btn-ghost min-h-11 sm:min-h-10 text-sm" onClick={() => setEditingConfig(null)}>Cancelar</button>
-              <button type="submit" className="btn min-h-11 sm:min-h-10">Salvar</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setEditingConfig(null)}>Cancelar</button>
+              <button type="submit" className="btn">Salvar</button>
             </div>
           </form>
         </div>

@@ -123,7 +123,7 @@ export default function Home() {
             <section aria-labelledby="proximas">
               <div className="mb-3 flex items-baseline justify-between">
                 <h2 id="proximas" className="eyebrow">Próximas do cronograma</h2>
-                <Link to="/calendario" className="text-xs text-zinc-500 hover:text-ink">Ver calendário</Link>
+                <Link to="/cronograma" className="text-xs text-zinc-500 hover:text-ink">Ver calendário</Link>
               </div>
               <ul className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white">
                 {upcoming.map((s) => (

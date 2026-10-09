@@ -6,7 +6,7 @@ import { describeAccess, useAccess } from '@/contexts'
 const NAV = [
   { to: '/dashboard', label: 'Início', icon: Home, match: ['/dashboard'] },
   { to: '/contagens', label: 'Contagens', icon: ClipboardList, match: ['/contagens', '/relatorio'] },
-  { to: '/calendario', label: 'Cronograma', icon: CalendarDays, match: ['/calendario', '/cronograma', '/categorias'] },
+  { to: '/cronograma', label: 'Cronograma', icon: CalendarDays, match: ['/cronograma', '/categorias'] },
   { to: '/conta', label: 'Conta', icon: UserRound, match: ['/conta', '/assinatura', '/catalogo', '/admin'] },
 ]
 

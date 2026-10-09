@@ -1,338 +1,172 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
+import { createCategory, deleteCategory, getCategories, updateCategory, type Category } from '@/lib/db'
+import ConfirmDialog from '@/components/ConfirmDialog'
+import ScheduleTabs from '@/components/ScheduleTabs'
 import { useToast } from '@/components/Toast'
-import ColorPicker from '@/components/ColorPicker'
-import {
-  getCategories,
-  createCategory,
-  updateCategory,
-  deleteCategory,
-  type Category
-} from '@/lib/db'
 
-const DEFAULT_COLORS = [
-  '#3B82F6', // Blue
-  '#EC4899', // Pink
-  '#8B5CF6', // Purple
-  '#10B981', // Green
-  '#F59E0B', // Orange
-  '#EF4444', // Red
-  '#06B6D4', // Cyan
-  '#8B5A3C', // Brown
-  '#6B7280'  // Gray
-]
+// Tons sóbrios, distinguíveis entre si no calendário.
+const COLORS = ['#3D3B36', '#8A6A4F', '#B7791F', '#C2412D', '#A14A6B', '#6B5B95', '#3F6C8F', '#1F8A5F', '#75716A']
+
+const SUGGESTIONS = ['Vestidos', 'Blusas', 'Calças', 'Saias', 'Casacos', 'Jeans', 'Calçados', 'Bolsas', 'Acessórios']
+
+type Draft = { id: string | null; name: string; color: string }
 
 export default function Categories() {
   const { addToast } = useToast()
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
-  
-  // Form state
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    color: DEFAULT_COLORS[0]
-  })
+  const [toDelete, setToDelete] = useState<Category | null>(null)
 
-  const loadCategories = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      setLoading(true)
-      const data = await getCategories()
-      setCategories(data)
+      setCategories(await getCategories())
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao carregar categorias'
-      addToast({
-        type: 'error',
-        message: 'Erro ao carregar categorias',
-        description: message
-      })
-      console.error('Erro ao carregar categorias:', err)
+      addToast({ type: 'error', message: 'Não foi possível carregar as categorias', description: err instanceof Error ? err.message : undefined })
     } finally {
       setLoading(false)
     }
   }, [addToast])
 
-  useEffect(() => {
-    loadCategories()
-  }, [loadCategories])
+  useEffect(() => { load() }, [load])
 
-  const resetForm = useCallback(() => {
-    setFormData({
-      name: '',
-      description: '',
-      color: DEFAULT_COLORS[0]
-    })
-    setEditingId(null)
-    setShowForm(false)
-  }, [])
+  const nextColor = () => COLORS[categories.length % COLORS.length]
 
-  const startCreate = useCallback(() => {
-    resetForm()
-    setShowForm(true)
-  }, [resetForm])
-
-  const startEdit = useCallback((category: Category) => {
-    setFormData({
-      name: category.name,
-      description: category.description || '',
-      color: category.color
-    })
-    setEditingId(category.id)
-    setShowForm(true)
-  }, [])
-
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+  async function save(e: React.FormEvent) {
     e.preventDefault()
-    
-    if (!formData.name.trim()) {
-      addToast({
-        type: 'warning',
-        message: 'Nome é obrigatório'
-      })
+    if (!draft) return
+    const name = draft.name.trim()
+    if (!name) return
+    if (categories.some((c) => c.id !== draft.id && c.name.toLowerCase() === name.toLowerCase())) {
+      addToast({ type: 'warning', message: 'Já existe uma categoria com esse nome' })
       return
     }
-
     setSaving(true)
     try {
-      if (editingId) {
-        // Update
-        await updateCategory(editingId, {
-          name: formData.name.trim(),
-          description: formData.description.trim() || undefined,
-          priority: 3, // Valor padrão fixo
-          color: formData.color
-        })
-        addToast({
-          type: 'success',
-          message: 'Categoria atualizada!',
-          duration: 2000
-        })
-      } else {
-        // Create
-        await createCategory({
-          name: formData.name.trim(),
-          description: formData.description.trim() || undefined,
-          priority: 3, // Valor padrão fixo
-          color: formData.color,
-          is_active: true
-        })
-        addToast({
-          type: 'success',
-          message: 'Categoria criada!',
-          duration: 2000
-        })
-      }
-      
-      resetForm()
-      await loadCategories()
+      if (draft.id) await updateCategory(draft.id, { name, color: draft.color })
+      else await createCategory({ name, priority: 3, color: draft.color, is_active: true })
+      setDraft(null)
+      await load()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao salvar categoria'
-      addToast({
-        type: 'error',
-        message: 'Erro ao salvar categoria',
-        description: message
-      })
-      console.error('Erro ao salvar categoria:', err)
+      addToast({ type: 'error', message: 'Não foi possível salvar', description: err instanceof Error ? err.message : undefined })
     } finally {
       setSaving(false)
     }
-  }, [formData, editingId, addToast, resetForm, loadCategories])
-
-  const handleDelete = useCallback(async (category: Category) => {
-    if (!confirm(`Tem certeza que deseja excluir a categoria "${category.name}"?`)) {
-      return
-    }
-
-    try {
-      await deleteCategory(category.id)
-      addToast({
-        type: 'info',
-        message: 'Categoria removida',
-        duration: 2000
-      })
-      await loadCategories()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao excluir categoria'
-      addToast({
-        type: 'error',
-        message: 'Erro ao excluir categoria',
-        description: message
-      })
-      console.error('Erro ao excluir categoria:', err)
-    }
-  }, [addToast, loadCategories])
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-sm text-zinc-500 dark:text-zinc-400">Carregando categorias...</div>
-        </div>
-      </div>
-    )
   }
 
+  async function addSuggestion(name: string) {
+    try {
+      await createCategory({ name, priority: 3, color: nextColor(), is_active: true })
+      await load()
+    } catch (err) {
+      addToast({ type: 'error', message: 'Não foi possível criar', description: err instanceof Error ? err.message : undefined })
+    }
+  }
+
+  async function remove() {
+    const c = toDelete
+    setToDelete(null)
+    if (!c) return
+    try {
+      await deleteCategory(c.id)
+      await load()
+    } catch (err) {
+      addToast({ type: 'error', message: 'Não foi possível excluir', description: err instanceof Error ? err.message : undefined })
+    }
+  }
+
+  const remaining = SUGGESTIONS.filter((s) => !categories.some((c) => c.name.toLowerCase() === s.toLowerCase()))
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-3xl space-y-6">
+      <ScheduleTabs />
+      <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Categorias</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Gerencie os setores da sua loja
-          </p>
+          <h1 className="page-title">Categorias</h1>
+          <p className="page-subtitle">Os grupos de produtos da loja. O cronograma distribui as categorias pelas semanas.</p>
         </div>
-        <button 
-          className="btn"
-          onClick={startCreate}
-          disabled={saving}
-        >
-          + Nova Categoria
-        </button>
-      </div>
-
-      {/* Form Modal */}
-      {showForm && (
-        <div className="card max-w-2xl">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium">
-                {editingId ? 'Editar Categoria' : 'Nova Categoria'}
-              </h3>
-              <button 
-                type="button" 
-                onClick={resetForm}
-                className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Nome *</label>
-                <input
-                  type="text"
-                  className="input"
-                  value={formData.name}
-                  onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Ex: Roupas Masculinas"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Descrição</label>
-              <textarea
-                className="input"
-                rows={2}
-                value={formData.description}
-                onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Descrição opcional da categoria..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Cor</label>
-              <ColorPicker
-                value={formData.color}
-                onChange={color => setFormData(prev => ({ ...prev, color }))}
-              />
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button 
-                type="submit" 
-                className="btn" 
-                disabled={saving}
-              >
-                {saving ? 'Salvando...' : (editingId ? 'Atualizar' : 'Criar')}
-              </button>
-              <button 
-                type="button" 
-                className="badge" 
-                onClick={resetForm}
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Categories List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {categories.length === 0 ? (
-          <div className="card text-center py-8 col-span-full">
-            <div className="text-zinc-500 dark:text-zinc-400 mb-4">
-              📂 Nenhuma categoria encontrada
-            </div>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
-              Crie categorias para organizar os setores da sua loja
-            </p>
-            <button className="btn" onClick={startCreate}>
-              Criar primeira categoria
-            </button>
-          </div>
-        ) : (
-          categories.map(category => (
-            <div key={category.id} className="card">
-              <div className="flex items-center gap-4">
-                {/* Color indicator */}
-                <div 
-                  className="w-4 h-4 rounded-full border border-zinc-300 dark:border-zinc-600"
-                  style={{ backgroundColor: category.color }}
-                />
-                
-                {/* Category info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-medium truncate">{category.name}</h3>
-                  </div>
-                  {category.description && (
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400 truncate">
-                      {category.description}
-                    </p>
-                  )}
-                  {category.last_counted_at && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-1">
-                      Última contagem: {new Date(category.last_counted_at).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-                
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button 
-                    className="badge"
-                    onClick={() => startEdit(category)}
-                  >
-                    Editar
-                  </button>
-                  <button 
-                    className="badge text-red-600 hover:bg-red-50"
-                    onClick={() => handleDelete(category)}
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
+        {!draft && (
+          <button type="button" className="btn shrink-0" onClick={() => setDraft({ id: null, name: '', color: nextColor() })}>
+            <Plus className="h-4 w-4" aria-hidden="true" /> Nova
+          </button>
         )}
-      </div>
+      </header>
 
-      {/* Stats */}
-      {categories.length > 0 && (
-        <div className="card">
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
-            <strong>{categories.length}</strong> categoria{categories.length !== 1 ? 's' : ''} cadastrada{categories.length !== 1 ? 's' : ''}
+      {draft && (
+        <form onSubmit={save} className="card space-y-4">
+          <div>
+            <label htmlFor="cat-name" className="label">{draft.id ? 'Renomear categoria' : 'Nome da categoria'}</label>
+            <input id="cat-name" className="input" maxLength={100} autoFocus placeholder="Ex.: Vestidos"
+              value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           </div>
-        </div>
+          <fieldset>
+            <legend className="label">Cor no calendário</legend>
+            <div className="flex flex-wrap gap-2">
+              {COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  aria-label={`Cor ${color}`}
+                  aria-pressed={draft.color === color}
+                  onClick={() => setDraft({ ...draft, color })}
+                  className={`h-8 w-8 rounded-full transition-shadow ${draft.color === color ? 'ring-2 ring-ink ring-offset-2' : ''}`}
+                  style={{ background: color }}
+                />
+              ))}
+            </div>
+          </fieldset>
+          <div className="flex gap-2">
+            <button type="submit" className="btn" disabled={saving || !draft.name.trim()}>{saving ? 'Salvando…' : 'Salvar'}</button>
+            <button type="button" className="btn btn-quiet" onClick={() => setDraft(null)}>Cancelar</button>
+          </div>
+        </form>
       )}
+
+      {loading ? (
+        <div className="space-y-2" aria-busy="true"><div className="skeleton h-14" /><div className="skeleton h-14" /></div>
+      ) : categories.length === 0 && !draft ? (
+        <div className="rounded-xl border border-dashed border-zinc-300 px-6 py-10 text-center">
+          <p className="font-medium">Nenhuma categoria ainda</p>
+          <p className="mt-1 text-sm text-zinc-500">Toque nas sugestões abaixo para adicionar ou crie as suas.</p>
+        </div>
+      ) : categories.length > 0 ? (
+        <ul className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white">
+          {categories.map((c) => (
+            <li key={c.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => setDraft({ id: c.id, name: c.name, color: c.color })}>Editar</button>
+              <button type="button" className="btn btn-quiet btn-sm hover:bg-red-50 hover:text-red-600" onClick={() => setToDelete(c)}>Excluir</button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {!loading && remaining.length > 0 && (
+        <section aria-labelledby="sugestoes">
+          <h2 id="sugestoes" className="eyebrow mb-3">Sugestões</h2>
+          <div className="flex flex-wrap gap-2">
+            {remaining.map((s) => (
+              <button key={s} type="button" onClick={() => addSuggestion(s)}
+                className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 transition-colors hover:border-zinc-400">
+                + {s}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Excluir esta categoria?"
+        description={toDelete ? `“${toDelete.name}” sai também das contagens programadas no cronograma.` : ''}
+        confirmLabel="Excluir"
+        destructive
+        onConfirm={remove}
+        onCancel={() => setToDelete(null)}
+      />
     </div>
   )
 }

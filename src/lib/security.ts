@@ -35,11 +35,9 @@ export const InputValidator = {
     return typeof code === 'string' && code.trim().length >= 1 && code.length <= 60
   },
 
-  // Validação de nome de categoria
+  // Nome de categoria: qualquer texto de 1 a 100 caracteres ("Calças & Shorts").
   categoryName: (name: string): boolean => {
-    // Permite letras, números, espaços e alguns caracteres especiais
-    const nameRegex = /^[a-zA-Z0-9\s\-_.áéíóúâêîôûãõçÁÉÍÓÚÂÊÎÔÛÃÕÇ]{1,100}$/
-    return nameRegex.test(name)
+    return typeof name === 'string' && name.trim().length >= 1 && name.length <= 100
   },
 
   // Validação de quantidade

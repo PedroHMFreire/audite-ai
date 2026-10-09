@@ -4,7 +4,6 @@ import Header, { BottomNav } from '@/components/Header'
 import AdminRoute from '@/components/AdminRoute'
 import { ToastProvider } from '@/components/Toast'
 import { useAuth } from '@/contexts'
-import { PERMISSIONS } from '@/lib/permissions'
 import Landing from '@/pages/Landing'
 import Login from '@/pages/Login'
 import Signup from '@/pages/Signup'
@@ -20,7 +19,6 @@ const CountDetail = lazy(() => import('@/pages/CountDetail'))
 const Report = lazy(() => import('@/pages/Report'))
 const Categories = lazy(() => import('@/pages/Categories'))
 const ScheduleConfig = lazy(() => import('@/pages/ScheduleConfig'))
-const ScheduleCalendar = lazy(() => import('@/pages/ScheduleCalendar'))
 const Account = lazy(() => import('@/pages/Account'))
 const Subscription = lazy(() => import('@/pages/Subscription'))
 const Catalog = lazy(() => import('@/pages/Catalog'))
@@ -78,7 +76,6 @@ export default function App() {
           <Route path="/contagens" element={<Counts />} />
           <Route path="/contagens/:id" element={<CountDetail />} />
           <Route path="/relatorio/:id" element={<Report />} />
-          <Route path="/calendario" element={<ScheduleCalendar />} />
           <Route path="/cronograma" element={<ScheduleConfig />} />
           <Route path="/categorias" element={<Categories />} />
           <Route path="/conta" element={<Account />} />
@@ -88,7 +85,7 @@ export default function App() {
           <Route
             path="/admin"
             element={
-              <AdminRoute requiredPermission={PERMISSIONS.VIEW_ADMIN_DASHBOARD}>
+              <AdminRoute>
                 <AdminDashboard />
               </AdminRoute>
             }
@@ -96,6 +93,7 @@ export default function App() {
         </Route>
 
         {/* Endereços antigos */}
+        <Route path="/calendario" element={<Navigate to="/cronograma" replace />} />
         <Route path="/trial-signup" element={<Navigate to="/cadastro" replace />} />
         <Route path="/trial-welcome" element={<Navigate to="/dashboard" replace />} />
         <Route path="/organizacao" element={<Navigate to="/catalogo" replace />} />

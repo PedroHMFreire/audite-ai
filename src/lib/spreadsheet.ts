@@ -129,13 +129,13 @@ const HEADER_WORDS = /c[oó]d|sku|refer|ean|barras|produto|descri|nome|item|sald
 /** A primeira linha é cabeçalho quando parece texto de título, não um produto. */
 function looksLikeHeader(row: string[], quantityCol: number | null): boolean {
   if (!row.length) return false
-  const first = row[0] || ''
   if (quantityCol !== null) {
     const q = row[quantityCol] || ''
-    if (q && /\d/.test(q) && !/[a-zA-ZÀ-ÿ]/.test(q)) return false
-    return true
+    // Saldo numérico: é produto. Saldo com letras ("Saldo", "Qtd"): é cabeçalho.
+    if (/\d/.test(q) && !/[a-zA-ZÀ-ÿ]/.test(q)) return false
+    if (/[a-zA-ZÀ-ÿ]/.test(q)) return true
   }
-  return HEADER_WORDS.test(first) || HEADER_WORDS.test(row[1] || '')
+  return HEADER_WORDS.test(row[0] || '')
 }
 
 /** Planilha de estoque: código | nome | saldo. */

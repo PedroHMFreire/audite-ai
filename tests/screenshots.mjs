@@ -45,6 +45,21 @@ async function seed() {
       { count_id: c2.id, codigo: '7891000100105', status: 'excesso', nome_produto: 'Calça alfaiataria preta', manual_qtd: 6, saldo_qtd: 5 },
     ])
   }
+  const { data: cats } = await admin.from('categories').select('id').eq('user_id', user.id)
+  if (cats.length === 0) {
+    const names = [['Vestidos', '#8A6A4F'], ['Blusas', '#3F6C8F'], ['Calças', '#3D3B36'], ['Acessórios', '#B7791F']]
+    const { data: created } = await admin.from('categories')
+      .insert(names.map(([name, color]) => ({ user_id: user.id, name, color, priority: 3 }))).select('id')
+    const today = new Date()
+    const iso = (offset) => { const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset, 12); return d.toISOString().slice(0, 10) }
+    const { data: cfg } = await admin.from('schedule_configs').insert({
+      user_id: user.id, name: 'Ciclo de demonstração', sectors_per_week: 2, start_date: iso(-7), total_weeks: 4, work_days: [1, 2, 3, 4, 5],
+    }).select('id').single()
+    await admin.from('schedule_items').insert([-6, -2, 0, 2, 5, 9, 12, 16].map((offset, i) => ({
+      config_id: cfg.id, category_id: created[i % created.length].id, scheduled_date: iso(offset),
+      week_number: Math.floor(i / 2) + 1, day_of_week: 1, status: i === 0 ? 'completed' : 'pending',
+    })))
+  }
   const { data: counts } = await admin.from('counts').select('id,status').eq('user_id', user.id)
   return {
     open: counts.find((c) => c.status !== 'finalizada')?.id,
@@ -54,7 +69,7 @@ async function seed() {
 
 const ids = await seed()
 const publicRoutes = ['/', '/login', '/cadastro', '/recuperar-senha', '/termos', '/privacidade']
-const privateRoutes = ['/dashboard', '/contagens', `/contagens/${ids.open}`, `/relatorio/${ids.done}`, '/categorias', '/cronograma', '/calendario', '/conta', '/assinatura', '/catalogo', '/ajuda']
+const privateRoutes = ['/dashboard', '/contagens', `/contagens/${ids.open}`, `/relatorio/${ids.done}`, '/categorias', '/cronograma', '/conta', '/assinatura', '/catalogo', '/ajuda']
 const only = process.argv[3]?.split(',')
 
 const browser = await chromium.launch()

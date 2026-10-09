@@ -155,8 +155,8 @@ export default function Report() {
 
       <dl className="grid grid-cols-3 divide-x divide-zinc-200 rounded-xl border border-zinc-200 bg-white">
         <Stat label="Certos" value={groups.regular.length} dot="bg-green-500" />
-        <Stat label="Faltas" value={groups.falta.length} dot="bg-red-500" detail={`${units(groups.falta).toLocaleString('pt-BR')} peças`} />
-        <Stat label="Sobras" value={groups.excesso.length} dot="bg-amber-500" detail={`${units(groups.excesso).toLocaleString('pt-BR')} peças`} />
+        <Stat label="Faltas" value={groups.falta.length} dot="bg-red-500" detail={pecas(units(groups.falta))} />
+        <Stat label="Sobras" value={groups.excesso.length} dot="bg-amber-500" detail={pecas(units(groups.excesso))} />
       </dl>
 
       <div className="flex flex-wrap gap-2">
@@ -259,6 +259,8 @@ function Stat({ label, value, dot, detail }: { label: string; value: number; dot
     </div>
   )
 }
+
+const pecas = (n: number) => `${n.toLocaleString('pt-BR')} ${n === 1 ? 'peça' : 'peças'}`
 
 const MOTIVO_OPTIONS = Object.entries(MOTIVO_LABELS) as [Motivo, string][]
 
