@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { Plus, ScanBarcode } from 'lucide-react'
 
 /**
- * Barra de inserção de itens da contagem.
- * - Botão grande de "Escanear" (câmera) como ação primária.
- * - Campo manual com teclado sem autocorreção (códigos não devem ser "corrigidos").
- * - Alvos de toque amplos para uso no estoque, com uma mão.
+ * Barra de inserção de itens da contagem, fixa no rodapé.
+ * - "Escanear" (câmera) é a ação principal.
+ * - Campo manual sem autocorreção: códigos não devem ser "corrigidos".
+ * - Alvos de toque amplos, para usar no estoque com uma mão.
  */
 export default function ManualEntry({
   onAdd,
@@ -18,7 +19,9 @@ export default function ManualEntry({
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    inputRef.current?.focus()
+    // No computador o foco vai direto ao campo (leitor USB digita como teclado).
+    // No celular não, para o teclado não cobrir a tela ao abrir a contagem.
+    if (window.matchMedia('(pointer: fine)').matches) inputRef.current?.focus()
   }, [])
 
   function submit(e: React.FormEvent) {
@@ -33,33 +36,19 @@ export default function ManualEntry({
   }
 
   return (
-    <div className="space-y-2.5">
-      <button
-        type="button"
-        onClick={onScan}
-        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary-500 hover:bg-primary-600 text-white font-semibold min-h-14 text-base active:scale-[.99] transition shadow-sm"
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
-          <path d="M7 12h10" />
-        </svg>
+    <div className="space-y-2">
+      <button type="button" onClick={onScan} className="btn btn-lg w-full">
+        <ScanBarcode className="h-5 w-5" aria-hidden="true" />
         Escanear código
       </button>
 
-      <div className="flex items-center gap-2">
-        <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
-        <span className="text-[11px] uppercase tracking-wide text-zinc-400">ou digite</span>
-        <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
-      </div>
-
-      <form onSubmit={submit} className="space-y-2">
-        {/* Código: largura total — é o campo principal */}
+      <form onSubmit={submit} className="flex items-stretch gap-2">
         <input
           ref={inputRef}
           value={code}
           onChange={e => setCode(e.target.value)}
-          placeholder="Código do produto"
-          className="input w-full min-h-12 font-mono text-base"
+          placeholder="ou digite o código"
+          className="input min-h-12 min-w-0 flex-1 font-mono"
           autoCapitalize="off"
           autoCorrect="off"
           autoComplete="off"
@@ -67,23 +56,21 @@ export default function ManualEntry({
           enterKeyHint="done"
           aria-label="Código do produto"
         />
-        {/* Quantidade compacta + botão Adicionar */}
-        <div className="flex items-stretch gap-2">
-          <input
-            value={qty}
-            onChange={e => {
-              const value = e.target.value
-              if (value === '') return setQty('')
-              const n = Number(value)
-              if (Number.isFinite(n)) setQty(Math.max(1, n))
-            }}
-            placeholder="Qtd"
-            inputMode="numeric"
-            className="input w-20 min-h-12 text-center flex-shrink-0"
-            aria-label="Quantidade"
-          />
-          <button className="btn flex-1 min-h-12" type="submit">Adicionar</button>
-        </div>
+        <input
+          value={qty}
+          onChange={e => {
+            const value = e.target.value.replace(/\D/g, '')
+            if (value === '') return setQty('')
+            setQty(Math.min(999999, Math.max(1, Number(value))))
+          }}
+          placeholder="Qtd"
+          inputMode="numeric"
+          className="input min-h-12 w-16 flex-shrink-0 px-1 text-center"
+          aria-label="Quantidade"
+        />
+        <button className="btn btn-secondary min-h-12 flex-shrink-0 px-3" type="submit" aria-label="Adicionar">
+          <Plus className="h-5 w-5" aria-hidden="true" />
+        </button>
       </form>
     </div>
   )

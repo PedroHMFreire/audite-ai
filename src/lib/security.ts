@@ -6,30 +6,12 @@ export const InputValidator = {
     return emailRegex.test(email) && email.length <= 254
   },
 
-  // Validação de senha forte
+  // Senha: comprimento é o que importa (NIST 800-63B); sem regras de composição
+  // que só atrapalham o cadastro. O limite de 72 é o do bcrypt usado pelo Supabase.
   password: (password: string): { valid: boolean; errors: string[] } => {
     const errors: string[] = []
-    
-    if (password.length < 8) {
-      errors.push('Senha deve ter pelo menos 8 caracteres')
-    }
-    
-    if (!/[A-Z]/.test(password)) {
-      errors.push('Senha deve conter pelo menos uma letra maiúscula')
-    }
-    
-    if (!/[a-z]/.test(password)) {
-      errors.push('Senha deve conter pelo menos uma letra minúscula')
-    }
-    
-    if (!/\d/.test(password)) {
-      errors.push('Senha deve conter pelo menos um número')
-    }
-    
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-      errors.push('Senha deve conter pelo menos um caractere especial')
-    }
-    
+    if (password.length < 8) errors.push('A senha precisa ter pelo menos 8 caracteres')
+    if (password.length > 72) errors.push('A senha pode ter no máximo 72 caracteres')
     return { valid: errors.length === 0, errors }
   },
 
@@ -39,22 +21,18 @@ export const InputValidator = {
     return uuidRegex.test(uuid)
   },
 
-  // Sanitização de texto para evitar XSS
+  // Limpa texto digitado: tira caracteres de controle e espaços das pontas.
+  // Não escapa HTML — o React já escapa ao renderizar, e escapar aqui gravava
+  // entidades no banco (um nome com "/" ou apóstrofo aparecia como "&#x2F;").
   sanitizeText: (text: string): string => {
-    return text
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;')
-      .replace(/\//g, '&#x2F;')
-      .trim()
+    // eslint-disable-next-line no-control-regex
+    return text.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim()
   },
 
-  // Validação de código de produto
+  // Código de produto: os sistemas de loja usam de tudo (EAN, "VEST.001/P",
+  // "REF 123-A"), então só exigimos que não seja vazio nem longo demais.
   productCode: (code: string): boolean => {
-    // Permite apenas alphanumericos, hífens e underscores
-    const codeRegex = /^[a-zA-Z0-9_-]{1,50}$/
-    return codeRegex.test(code)
+    return typeof code === 'string' && code.trim().length >= 1 && code.length <= 60
   },
 
   // Validação de nome de categoria

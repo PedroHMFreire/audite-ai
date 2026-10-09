@@ -1,99 +1,40 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-interface UsePWAPromptReturn {
-  canInstall: boolean
-  showPrompt: boolean
-  isIOS: boolean
-  isStandalone: boolean
-  handleInstall: () => Promise<void>
-  handleDismiss: () => void
-}
-
-const DISMISSED_KEY = 'pwa-prompt-dismissed'
-
-export function usePWAPrompt(): UsePWAPromptReturn {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [showPrompt, setShowPrompt] = useState(false)
-  const [isIOS, setIsIOS] = useState(false)
+/**
+ * Instalação do app na tela inicial. Nada aparece sozinho: a opção fica na
+ * tela de Conta e só é oferecida quando o navegador permite instalar.
+ */
+export function useInstallApp() {
+  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
   const [isStandalone, setIsStandalone] = useState(false)
+  const [isIOS, setIsIOS] = useState(false)
 
   useEffect(() => {
-    // Detect iOS
-    const iosPlatforms = ['iPad Simulator', 'iPhone Simulator', 'iPod Simulator', 'iPad', 'iPhone', 'iPod']
-    const isIOSDevice = iosPlatforms.some(
-      (platform) => navigator.platform.includes(platform)
-    ) || navigator.userAgent.includes('Mac OS X')
-    setIsIOS(isIOSDevice)
+    setIsStandalone(
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as { standalone?: boolean }).standalone === true
+    )
+    setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent))
 
-    // Detect if already installed (standalone mode)
-    const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || 
-                           (window.navigator as any).standalone === true
-    setIsStandalone(isStandaloneMode)
-
-    // Don't show prompt if already standalone
-    if (isStandaloneMode) return
-
-    // Check if user already dismissed
-    const wasDismissed = localStorage.getItem(DISMISSED_KEY)
-    if (wasDismissed) return
-
-    // Listen for beforeinstallprompt event
-    const handleBeforeInstallPrompt = (e: Event) => {
+    const onPrompt = (e: Event) => {
       e.preventDefault()
-      const promiseEvent = e as BeforeInstallPromptEvent
-      setDeferredPrompt(promiseEvent)
-      
-      // Show our custom prompt after 2 seconds
-      setTimeout(() => {
-        setShowPrompt(true)
-      }, 2000)
+      setDeferred(e as BeforeInstallPromptEvent)
     }
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-    }
+    window.addEventListener('beforeinstallprompt', onPrompt)
+    return () => window.removeEventListener('beforeinstallprompt', onPrompt)
   }, [])
 
-  const handleInstall = useCallback(async () => {
-    if (!deferredPrompt) return
+  const install = useCallback(async () => {
+    if (!deferred) return
+    await deferred.prompt()
+    await deferred.userChoice.catch(() => null)
+    setDeferred(null)
+  }, [deferred])
 
-    try {
-      deferredPrompt.prompt()
-      const { outcome } = await deferredPrompt.userChoice
-      
-      if (outcome === 'accepted') {
-        console.log('[PWA] User accepted install')
-        setShowPrompt(false)
-        localStorage.setItem(DISMISSED_KEY, 'true')
-      } else {
-        console.log('[PWA] User dismissed install')
-      }
-    } catch (error) {
-      console.error('[PWA] Install error:', error)
-    }
-
-    setDeferredPrompt(null)
-  }, [deferredPrompt])
-
-  const handleDismiss = useCallback(() => {
-    setShowPrompt(false)
-    localStorage.setItem(DISMISSED_KEY, 'true')
-    setDeferredPrompt(null)
-  }, [])
-
-  return {
-    canInstall: !!deferredPrompt,
-    showPrompt,
-    isIOS,
-    isStandalone,
-    handleInstall,
-    handleDismiss
-  }
+  return { canInstall: !!deferred, isStandalone, isIOS, install }
 }

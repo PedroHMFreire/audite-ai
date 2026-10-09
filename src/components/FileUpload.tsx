@@ -1,116 +1,44 @@
-type Item = { codigo: string; nome: string; saldo: number }
+import { useRef, useState } from 'react'
+import { Upload } from 'lucide-react'
+import { readSpreadsheet, toPlanRows, type PlanRow } from '@/lib/spreadsheet'
 
-export default function FileUpload({ onParsed }: { onParsed: (rows: Item[]) => void }) {
+export default function FileUpload({ onParsed }: { onParsed: (rows: PlanRow[]) => void | Promise<void> }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = '' // permite reenviar o mesmo arquivo depois de corrigir
     if (!file) return
-
-    const fileName = file.name.toLowerCase()
-    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.csv')) {
-      alert('Formato invalido. Envie um arquivo .xlsx ou .csv')
-      return
-    }
-
+    setError(null)
+    setBusy(true)
     try {
-      if (fileName.endsWith('.csv')) {
-        const text = await file.text()
-        onParsed(parseRows(parseCsv(text)))
+      const rows = toPlanRows(await readSpreadsheet(file))
+      if (rows.length === 0) {
+        setError('Não encontramos produtos no arquivo. As colunas devem ser, nesta ordem: código, nome e saldo.')
         return
       }
-
-      const arrayBuffer = await file.arrayBuffer()
-      const { Workbook } = await import('exceljs')
-      const workbook = new Workbook()
-      await workbook.xlsx.load(arrayBuffer)
-
-      const worksheet = workbook.worksheets[0]
-      if (!worksheet) {
-        onParsed([])
-        return
-      }
-
-      const rawRows: string[][] = []
-      worksheet.eachRow((row) => {
-        const values = Array.isArray(row.values) ? row.values.slice(1) : []
-        rawRows.push(values.map((value) => String(value ?? '').trim()))
-      })
-
-      onParsed(parseRows(rawRows))
-    } catch {
-      alert('Nao foi possivel processar a planilha. Verifique o formato do arquivo.')
+      await onParsed(rows)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível ler a planilha.')
+    } finally {
+      setBusy(false)
     }
-  }
-
-  function parseRows(rawRows: string[][]): Item[] {
-    const rows: Item[] = []
-    for (let i = 1; i < rawRows.length; i++) {
-      const row = rawRows[i]
-      if (!row || row.length < 3) continue
-      const codigo = String(row[0] ?? '').trim()
-      const nome = String(row[1] ?? '').trim()
-      const saldo = parseInt(String(row[2] ?? '0').replace(/[^\d-]/g, ''), 10) || 0
-      if (codigo) rows.push({ codigo, nome, saldo })
-    }
-    return rows
-  }
-
-  function parseCsv(text: string): string[][] {
-    const rows: string[][] = []
-    let row: string[] = []
-    let field = ''
-    let inQuotes = false
-    const delimiter = detectDelimiter(text)
-
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i]
-      const next = text[i + 1]
-
-      if (char === '"' && inQuotes && next === '"') {
-        field += '"'
-        i++
-        continue
-      }
-
-      if (char === '"') {
-        inQuotes = !inQuotes
-        continue
-      }
-
-      if (char === delimiter && !inQuotes) {
-        row.push(field.trim())
-        field = ''
-        continue
-      }
-
-      if ((char === '\n' || char === '\r') && !inQuotes) {
-        if (char === '\r' && next === '\n') i++
-        row.push(field.trim())
-        if (row.some(Boolean)) rows.push(row)
-        row = []
-        field = ''
-        continue
-      }
-
-      field += char
-    }
-
-    row.push(field.trim())
-    if (row.some(Boolean)) rows.push(row)
-    return rows
-  }
-
-  function detectDelimiter(text: string) {
-    const firstLine = text.split(/\r?\n/, 1)[0] || ''
-    return firstLine.split(';').length > firstLine.split(',').length ? ';' : ','
   }
 
   return (
-    <label className="block">
-      <div className="space-y-1">
-        <span className="text-sm font-medium">Carregar planilha</span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400 block">Formato: .xlsx ou .csv (código | nome | saldo)</span>
-      </div>
-      <input type="file" accept=".xlsx,.csv" onChange={handleFile} className="mt-3 block w-full text-sm file:btn file:py-2 file:px-3 file:mr-3 file:border-0 file:rounded-xl" />
-    </label>
+    <div>
+      <input ref={inputRef} type="file" accept=".xlsx,.csv" onChange={handleFile} className="sr-only" id="planilha-estoque" />
+      <label
+        htmlFor="planilha-estoque"
+        className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 text-center transition-colors hover:border-zinc-400 hover:bg-zinc-100 ${busy ? 'pointer-events-none opacity-60' : ''}`}
+      >
+        <Upload className="h-5 w-5 text-zinc-500" aria-hidden="true" />
+        <span className="text-sm font-medium">{busy ? 'Lendo planilha…' : 'Escolher planilha do estoque'}</span>
+        <span className="text-xs text-zinc-500">Excel (.xlsx) ou CSV, com as colunas código, nome e saldo</span>
+      </label>
+      {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
+    </div>
   )
 }

@@ -1,11 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import CoverageProgressBar from '@/components/CoverageProgressBar'
+import { ArrowLeft } from 'lucide-react'
 import ConfirmFinalizationModal from '@/components/ConfirmFinalizationModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import FileUpload from '@/components/FileUpload'
 import ManualEntry from '@/components/ManualEntry'
 import { useToast } from '@/components/Toast'
+import { AccessNotice, accessErrorMessage, useCanWrite } from '@/components/AccessGate'
 import {
   addManualEntry,
   computeAndSaveResults,
@@ -46,6 +47,7 @@ export default function CountDetail() {
   const [showNotCounted, setShowNotCounted] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<Entry | null>(null)
   const lastAddRef = useRef<{ codigo: string; qty: number } | null>(null)
+  const [lastAdd, setLastAdd] = useState(false)
   const reconcileTimer = useRef<number | null>(null)
   const hasOrg = useRef<boolean>(false)
   const catalogCache = useRef<Map<string, string | null>>(new Map())
@@ -57,7 +59,9 @@ export default function CountDetail() {
     suggestionNome: string | null
   } | null>(null)
 
-  const isEditable = count?.status !== 'finalizada' && count?.status !== 'arquivada'
+  const canWrite = useCanWrite()
+  const isOpen = count?.status !== 'finalizada' && count?.status !== 'arquivada'
+  const isEditable = isOpen && canWrite
   const canViewReport = count?.status === 'finalizada'
 
   const planCodes = useMemo(() => new Set(plan.map(p => p.codigo)), [plan])
@@ -108,7 +112,7 @@ export default function CountDetail() {
 
   useEffect(() => {
     if (!id || !InputValidator.uuid(id)) {
-      addToast({ type: 'error', message: 'ID da contagem invalido' })
+      addToast({ type: 'error', message: 'Contagem não encontrada' })
       nav('/contagens')
       return
     }
@@ -167,10 +171,10 @@ export default function CountDetail() {
       await replacePlanItems(id, items)
       const rows = await getPlanItems(id)
       setPlan(rows)
-      addToast({ type: 'success', message: 'Planilha carregada!', description: `${rows.length} produtos no plano` })
+      addToast({ type: 'success', message: 'Planilha carregada', description: `${rows.length.toLocaleString('pt-BR')} produtos` })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao salvar planilha'
-      addToast({ type: 'error', message: 'Erro ao salvar planilha', description: message })
+      const message = accessErrorMessage(err) || (err instanceof Error ? err.message : 'Erro ao salvar planilha')
+      addToast({ type: 'error', message: 'Não foi possível salvar a planilha', description: message, duration: 8000 })
     }
   }, [id, isEditable, addToast])
 
@@ -189,6 +193,7 @@ export default function CountDetail() {
       return [{ id: `tmp-${codigo}`, codigo, qty, pending: true }, ...prev]
     })
     lastAddRef.current = { codigo, qty }
+    setLastAdd(true)
     if (inPlan) feedbackSuccess()
     else feedbackWarning()
 
@@ -199,20 +204,20 @@ export default function CountDetail() {
       let toastDesc = inPlan
         ? `Total contado: ${newTotal}`
         : catalogNome
-          ? `${codigo} · fora do plano desta contagem`
-          : 'Código desconhecido registrado como excesso'
+          ? `${codigo} · fora da planilha desta contagem`
+          : 'Código fora da planilha, registrado como sobra'
       addToast({ type: toastType, message: toastMsg, description: toastDesc, duration: 2200 })
       scheduleReconcile()
     } catch (err) {
       feedbackError()
-      const message = err instanceof Error ? err.message : 'Erro ao adicionar'
+      const message = accessErrorMessage(err) || (err instanceof Error ? err.message : 'Erro ao adicionar')
       addToast({ type: 'error', message: 'Não foi possível adicionar', description: message })
     }
   }, [id, addToast, scheduleReconcile])
 
   const onAdd = useCallback(async (codigoRaw: string, qty: number = 1) => {
     if (!id || !isEditable) {
-      if (!isEditable) addToast({ type: 'warning', message: 'Contagem bloqueada', description: 'Reabra para inserir itens' })
+      if (!isEditable) addToast({ type: 'warning', message: 'Contagem fechada', description: 'Reabra pelo relatório para incluir itens.' })
       return
     }
     const codigo = resolveCode(codigoRaw.trim()) // normaliza para o código canônico do plano
@@ -260,6 +265,7 @@ export default function CountDetail() {
     const last = lastAddRef.current
     if (!last || !id) return
     lastAddRef.current = null
+    setLastAdd(false)
     const codigo = last.codigo
     let resultTotal = 0
     setEntries(prev => {
@@ -356,19 +362,19 @@ export default function CountDetail() {
       if (remaining > 0) {
         addToast({
           type: 'error',
-          message: 'Entradas não sincronizadas',
-          description: `${remaining} leitura(s) pendentes. Verifique a conexão e tente novamente.`
+          message: 'Ainda há leituras para enviar',
+          description: `${remaining} ${remaining === 1 ? 'leitura está guardada' : 'leituras estão guardadas'} no aparelho. Conecte-se à internet e tente de novo.`
         })
         return
       }
 
       const summary = await computeAndSaveResults(id)
-      addToast({ type: 'success', message: 'Contagem finalizada!', description: `${summary.total} itens processados` })
+      addToast({ type: 'success', message: 'Contagem finalizada', description: `${summary.total.toLocaleString('pt-BR')} produtos conferidos` })
       setCount(prev => prev ? { ...prev, status: 'finalizada' } : prev)
       window.setTimeout(() => nav(`/relatorio/${id}`), 900)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao finalizar'
-      addToast({ type: 'error', message: 'Erro ao finalizar contagem', description: message })
+      const message = accessErrorMessage(err) || (err instanceof Error ? err.message : 'Erro ao finalizar')
+      addToast({ type: 'error', message: 'Não foi possível finalizar', description: message })
     } finally {
       setIsProcessing(false)
       setShowConfirmModal(false)
@@ -378,11 +384,11 @@ export default function CountDetail() {
   const handleFinalizarClick = useCallback(() => {
     if (!isEditable) return
     if (plan.length === 0) {
-      addToast({ type: 'error', message: 'Planilha não carregada', description: 'Envie a planilha antes de finalizar' })
+      addToast({ type: 'warning', message: 'Falta a planilha do estoque', description: 'Importe a planilha para comparar com o que foi contado.' })
       return
     }
     if (entries.length === 0) {
-      addToast({ type: 'error', message: 'Nenhum item inserido', description: 'Insira ao menos um item' })
+      addToast({ type: 'warning', message: 'Nada foi contado ainda', description: 'Bipe ou digite ao menos uma peça.' })
       return
     }
     setShowConfirmModal(true)
@@ -406,23 +412,35 @@ export default function CountDetail() {
   const progressPct = stats.totalPlano > 0 ? Math.round((stats.contados / stats.totalPlano) * 100) : 0
 
   return (
-    <div className="space-y-5 pb-44">
+    <div className={`space-y-5 ${isEditable ? 'pb-40' : ''}`}>
       {/* Cabeçalho */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold truncate">
-            {count?.nome || '...'}
-            {storeName && <span className="text-zinc-500 dark:text-zinc-400 font-normal"> • {storeName}</span>}
-          </h1>
-          <div className="mt-0.5"><SyncStatus countId={id!} /></div>
+      <div>
+        <Link to="/contagens" className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-ink">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Contagens
+        </Link>
+        <div className="mt-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="page-title truncate">
+              {count?.nome || '…'}
+              {storeName && <span className="font-normal text-zinc-500"> · {storeName}</span>}
+            </h1>
+            {isOpen && <div className="mt-1"><SyncStatus countId={id!} /></div>}
+          </div>
+          {canViewReport && <Link to={`/relatorio/${id}`} className="btn btn-sm shrink-0">Ver relatório</Link>}
+          {isEditable && (
+            <button type="button" className="btn btn-secondary btn-sm shrink-0" onClick={handleFinalizarClick} disabled={isProcessing}>
+              {isProcessing ? 'Finalizando…' : 'Finalizar'}
+            </button>
+          )}
         </div>
-        {canViewReport && <Link to={`/relatorio/${id}`} className="badge badge-primary flex-shrink-0">Ver relatório</Link>}
       </div>
 
-      {!isEditable && (
-        <div className="card border-warning/30 bg-warning/10 text-sm text-yellow-800 dark:text-yellow-100">
-          Contagem bloqueada para edição. Reabra pelo relatório para alterar.
-        </div>
+      <AccessNotice />
+
+      {!isOpen && (
+        <p className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600">
+          Esta contagem está finalizada. Para incluir ou corrigir itens, reabra pelo relatório.
+        </p>
       )}
 
       {/* Corpo em 2 colunas no desktop */}
@@ -434,21 +452,20 @@ export default function CountDetail() {
         <div className="card space-y-3">
           <div className="flex items-end justify-between">
             <div>
-              <div className="text-xs text-muted">Progresso da contagem</div>
+              <div className="eyebrow">Produtos contados</div>
               <div className="text-2xl font-semibold">
                 {stats.contados}<span className="text-zinc-400 text-lg"> / {stats.totalPlano}</span>
-                <span className="text-sm font-normal text-muted ml-1">produtos</span>
               </div>
             </div>
-            <div className="text-3xl font-bold text-primary-500 tabular-nums">{progressPct}%</div>
+            <div className="tabular text-3xl font-semibold">{progressPct}%</div>
           </div>
-          <div className="h-2.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-            <div className="h-full rounded-full bg-primary-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100} aria-label="Progresso da contagem">
+            <div className="h-full rounded-full bg-ink transition-all duration-500" style={{ width: `${progressPct}%` }} />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-            <Chip label="Regular" value={stats.regular} tone="success" />
-            <Chip label="Falta" value={stats.falta} tone="warning" />
-            <Chip label="Excesso" value={stats.excesso + stats.extras} tone="danger" />
+            <Chip label="Certos" value={stats.regular} tone="success" />
+            <Chip label="Faltas" value={stats.falta} tone="danger" />
+            <Chip label="Sobras" value={stats.excesso + stats.extras} tone="warning" />
             <Chip label="Não contados" value={stats.naoContado} tone="muted" />
           </div>
         </div>
@@ -458,18 +475,12 @@ export default function CountDetail() {
       {isEditable && (
         <details className="card" open={plan.length === 0}>
           <summary className="cursor-pointer text-sm font-medium select-none">
-            {plan.length === 0 ? '1) Envie a planilha (código | nome | saldo)' : `Planilha carregada · ${plan.length} produtos`}
+            {plan.length === 0 ? 'Planilha do estoque' : `Planilha carregada · ${plan.length.toLocaleString('pt-BR')} produtos (trocar)`}
           </summary>
           <div className="pt-3"><FileUpload onParsed={onParsed} /></div>
         </details>
       )}
 
-      <CoverageProgressBar
-        planCodes={totals.planCodes}
-        insertedCodes={totals.insertedCodes}
-        planItems={totals.planItems}
-        insertedItems={totals.insertedItems}
-      />
       </div>{/* fim coluna esquerda */}
 
       {/* Coluna direita: o que falta e itens contados */}
@@ -503,7 +514,12 @@ export default function CountDetail() {
       {/* Itens contados */}
       <div className="card">
         <div className="flex items-center justify-between mb-3 gap-3">
-          <h3 className="text-sm font-semibold">Itens contados <span className="text-muted">({entries.length})</span></h3>
+          <h2 className="text-sm font-semibold">Itens contados <span className="font-normal text-zinc-500">({entries.length})</span></h2>
+          {isEditable && lastAdd && (
+            <button type="button" className="text-sm text-zinc-500 underline decoration-zinc-300 underline-offset-4 hover:text-ink" onClick={undoLast}>
+              Desfazer último
+            </button>
+          )}
         </div>
         {entries.length > 8 && (
           <input
@@ -529,12 +545,12 @@ export default function CountDetail() {
                 )}
                 <div className="text-xs text-muted mt-0.5">
                   {entry.qty} un
-                  {entry.pending && <span className="ml-2 text-primary-500">⟳ sincronizando</span>}
+                  {entry.pending && <span className="ml-2 text-zinc-400">enviando…</span>}
                 </div>
               </div>
               {isEditable && (
                 <button
-                  className="rounded-lg px-3 min-h-10 text-sm text-danger hover:bg-danger/10 active:scale-95 transition"
+                  className="min-h-10 rounded-lg px-3 text-sm text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600"
                   onClick={() => setRemoveTarget(entry)}
                   aria-label={`Remover ${entry.codigo}`}
                 >
@@ -557,27 +573,11 @@ export default function CountDetail() {
 
       {/* Barra fixa de ação (no alcance do polegar) */}
       {isEditable && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="max-w-2xl mx-auto space-y-2.5">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 dark:border-zinc-800 bg-paper/95 backdrop-blur px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto max-w-2xl">
             <ManualEntry onAdd={onAdd} onScan={() => setShowScanner(true)} />
-            <div className="flex gap-2">
-              <button
-                className="btn-ghost rounded-xl px-4 min-h-11 text-sm disabled:opacity-40"
-                onClick={undoLast}
-                disabled={!lastAddRef.current}
-              >
-                ↶ Desfazer
-              </button>
-              <button className="btn flex-1 min-h-11" onClick={handleFinalizarClick} disabled={isProcessing}>
-                {isProcessing ? 'Processando...' : 'Finalizar contagem'}
-              </button>
-            </div>
           </div>
         </div>
-      )}
-
-      {!isEditable && (
-        <Link to="/contagens" className="badge">Voltar</Link>
       )}
 
       {showScanner && (
@@ -598,7 +598,7 @@ export default function CountDetail() {
               <div className="text-sm font-semibold text-red-600 dark:text-red-400 mb-1">Código não encontrado</div>
               <div className="text-2xl font-mono font-bold tracking-wider">{pendingUnknown.codigo}</div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
-                Este código não está no plano nem no catálogo de produtos.<br />
+                Este código não está na planilha nem no catálogo de produtos.<br />
                 Verifique se foi lido ou digitado corretamente.
               </p>
             </div>
@@ -625,14 +625,14 @@ export default function CountDetail() {
             )}
 
             <div className="flex gap-2">
-              <button className="btn-ghost flex-1 min-h-11" onClick={() => setPendingUnknown(null)}>
+              <button className="btn btn-secondary flex-1" onClick={() => setPendingUnknown(null)}>
                 Cancelar
               </button>
               <button
-                className="flex-1 min-h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors"
+                className="btn flex-1"
                 onClick={confirmUnknownCode}
               >
-                Inserir mesmo assim
+                Registrar como sobra
               </button>
             </div>
           </div>
@@ -655,6 +655,7 @@ export default function CountDetail() {
         planItems={totals.planItems}
         insertedCodes={totals.insertedCodes}
         insertedItems={totals.insertedItems}
+        notCounted={stats.naoContado}
         loading={isProcessing}
         onConfirm={finalizar}
         onCancel={() => setShowConfirmModal(false)}
@@ -665,27 +666,30 @@ export default function CountDetail() {
 
 function Chip({ label, value, tone }: { label: string; value: number; tone: 'success' | 'warning' | 'danger' | 'muted' }) {
   const tones: Record<string, string> = {
-    success: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    warning: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    danger: 'bg-red-500/10 text-red-600 dark:text-red-400',
-    muted: 'bg-zinc-500/10 text-zinc-500'
+    success: 'bg-green-500',
+    warning: 'bg-amber-500',
+    danger: 'bg-red-500',
+    muted: 'bg-zinc-300'
   }
   return (
-    <div className={`rounded-xl px-3 py-2 ${tones[tone]}`}>
-      <div className="text-lg font-semibold tabular-nums leading-none">{value}</div>
-      <div className="text-[11px] mt-1 opacity-80">{label}</div>
+    <div className="rounded-lg bg-zinc-50 px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+        <span className={`h-1.5 w-1.5 rounded-full ${tones[tone]}`} aria-hidden="true" />
+        {label}
+      </div>
+      <div className="tabular mt-1 text-xl font-semibold leading-none">{value}</div>
     </div>
   )
 }
 
 function StatusDot({ status }: { status: ItemStatus }) {
   const map: Record<ItemStatus, { c: string; t: string }> = {
-    regular: { c: 'bg-emerald-500', t: 'Regular' },
-    falta: { c: 'bg-amber-500', t: 'Falta' },
-    excesso: { c: 'bg-red-500', t: 'Excesso' },
+    regular: { c: 'bg-green-500', t: 'Certo' },
+    falta: { c: 'bg-red-500', t: 'Falta' },
+    excesso: { c: 'bg-amber-500', t: 'Sobra' },
     nao_contado: { c: 'bg-zinc-300 dark:bg-zinc-600', t: 'Não contado' }
   }
-  return <span className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${map[status].c}`} title={map[status].t} />
+  return <span className={`h-2 w-2 flex-shrink-0 rounded-full ${map[status].c}`} role="img" aria-label={map[status].t} title={map[status].t} />
 }
 
 function SyncStatus({ countId }: { countId: string }) {
@@ -710,7 +714,7 @@ function SyncStatus({ countId }: { countId: string }) {
     return <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"><span className="h-2 w-2 rounded-full bg-amber-500" />Offline — salvando no aparelho</span>
   }
   if (pending > 0) {
-    return <span className="inline-flex items-center gap-1.5 text-xs text-primary-500"><span className="h-2 w-2 rounded-full bg-primary-500 animate-pulse" />Sincronizando {pending}…</span>
+    return <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500"><span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400" />Enviando {pending}…</span>
   }
   return <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tudo salvo</span>
 }

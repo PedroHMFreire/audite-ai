@@ -1,107 +1,107 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import Header from '@/components/Header'
-import Footer from '@/components/Footer'
-import PWAInstallPrompt from '@/components/PWAInstallPrompt'
+import { lazy, Suspense, type ReactNode } from 'react'
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import Header, { BottomNav } from '@/components/Header'
 import AdminRoute from '@/components/AdminRoute'
 import { ToastProvider } from '@/components/Toast'
-import { OnboardingOverlay } from '@/components/Onboarding'
+import { useAuth } from '@/contexts'
+import { PERMISSIONS } from '@/lib/permissions'
+import Landing from '@/pages/Landing'
 import Login from '@/pages/Login'
+import Signup from '@/pages/Signup'
+import ForgotPassword from '@/pages/ForgotPassword'
+import ResetPassword from '@/pages/ResetPassword'
+import Terms from '@/pages/Terms'
+import Privacy from '@/pages/Privacy'
 import Home from '@/pages/Home'
 import Counts from '@/pages/Counts'
-import CountDetail from '@/pages/CountDetail'
-import Report from '@/pages/Report'
-import Categories from '@/pages/Categories'
-import ScheduleConfig from '@/pages/ScheduleConfig'
-import ScheduleCalendar from '@/pages/ScheduleCalendar'
-import AdminDashboard from '@/pages/AdminDashboard'
-import LandingPage from '@/pages/LandingPage'
-import TrialSignup from '@/pages/TrialSignup'
-import TrialWelcome from '@/pages/TrialWelcome'
-import NotificationPreferences from '@/pages/NotificationPreferences'
-import Organization from '@/pages/Organization'
-import AcceptInvitation from '@/pages/AcceptInvitation'
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import { PERMISSIONS } from '@/lib/permissions'
 
-function PrivateRoute({ children }: { children: JSX.Element }) {
-  const [loading, setLoading] = useState(true)
-  const [isAuthed, setIsAuthed] = useState(false)
+// Telas pesadas (leitor de código, planilhas, PDF, gráficos) carregam sob demanda.
+const CountDetail = lazy(() => import('@/pages/CountDetail'))
+const Report = lazy(() => import('@/pages/Report'))
+const Categories = lazy(() => import('@/pages/Categories'))
+const ScheduleConfig = lazy(() => import('@/pages/ScheduleConfig'))
+const ScheduleCalendar = lazy(() => import('@/pages/ScheduleCalendar'))
+const Account = lazy(() => import('@/pages/Account'))
+const Subscription = lazy(() => import('@/pages/Subscription'))
+const Catalog = lazy(() => import('@/pages/Catalog'))
+const Help = lazy(() => import('@/pages/Help'))
+const AdminDashboard = lazy(() => import('@/pages/AdminDashboard'))
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setIsAuthed(!!data.session)
-      setLoading(false)
-    })
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setIsAuthed(!!session)
-    })
-    return () => { sub.subscription.unsubscribe() }
-  }, [])
+function Loading() {
+  return (
+    <div className="grid min-h-[40vh] place-items-center text-sm text-zinc-500" role="status" aria-live="polite">
+      Carregando…
+    </div>
+  )
+}
 
-  if (loading) return <div className="min-h-screen grid place-items-center text-sm text-zinc-500 dark:text-zinc-400">Carregando…</div>
-  return isAuthed ? children : <Navigate to="/login" replace />
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { isAuthenticated, loading } = useAuth()
+  const location = useLocation()
+  if (loading) return <Loading />
+  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  return <>{children}</>
+}
+
+/** Moldura do aplicativo logado: cabeçalho, conteúdo e navegação inferior no celular. */
+function AppLayout() {
+  const { pathname } = useLocation()
+  // Na tela de contagem o rodapé é a barra de bipar; a navegação sai do caminho.
+  const focused = /^\/contagens\/[^/]+/.test(pathname)
+  return (
+    <div className="min-h-screen bg-paper">
+      <Header />
+      <main className={`container-safe pt-6 sm:pt-8 ${focused ? 'pb-8' : 'pb-24 md:pb-12'}`}>
+        <Suspense fallback={<Loading />}>
+          <Outlet />
+        </Suspense>
+      </main>
+      {!focused && <BottomNav />}
+    </div>
+  )
 }
 
 export default function App() {
-  const location = useLocation()
-  
-  // Check if current route is public (landing page routes)
-  const isPublicRoute = ['/', '/trial-signup', '/trial-welcome'].includes(location.pathname)
-    || location.pathname.startsWith('/convite/')
-  
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-slate-900 dark:text-slate-50">
-        {/* Only show Header for app routes, not landing page */}
-        {!isPublicRoute && <Header />}
-        
-        <main className={isPublicRoute ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'} style={!isPublicRoute ? { paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' } : {}}>
-          <Routes>
-            {/* Public Routes - Landing Page System */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/trial-signup" element={<TrialSignup />} />
-            <Route path="/trial-welcome" element={<TrialWelcome />} />
-            
-            {/* Auth Route */}
-            <Route path="/login" element={<Login />} />
-            
-            {/* App Routes - Authenticated System */}
-            <Route path="/dashboard" element={<PrivateRoute><Home /></PrivateRoute>} />
-            <Route path="/contagens" element={<PrivateRoute><Counts /></PrivateRoute>} />
-            <Route path="/contagens/:id" element={<PrivateRoute><CountDetail /></PrivateRoute>} />
-            <Route path="/relatorio/:id" element={<PrivateRoute><Report /></PrivateRoute>} />
-            <Route path="/categorias" element={<PrivateRoute><Categories /></PrivateRoute>} />
-            <Route path="/cronograma" element={<PrivateRoute><ScheduleConfig /></PrivateRoute>} />
-            <Route path="/calendario" element={<PrivateRoute><ScheduleCalendar /></PrivateRoute>} />
-            <Route path="/notificacoes" element={<PrivateRoute><NotificationPreferences /></PrivateRoute>} />
-            <Route path="/notifications" element={<Navigate to="/notificacoes" replace />} />
-            <Route path="/organizacao" element={<PrivateRoute><Organization /></PrivateRoute>} />
-            <Route path="/convite/:token" element={<AcceptInvitation />} />
-            
-            {/* Admin Routes - Protected */}
-            <Route path="/admin" element={
-              <PrivateRoute>
-                <AdminRoute requiredPermission={PERMISSIONS.VIEW_ADMIN_DASHBOARD}>
-                  <AdminDashboard />
-                </AdminRoute>
-              </PrivateRoute>
-            } />
-            
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-        
-        {/* Only show Footer for app routes, not landing page */}
-        {!isPublicRoute && <Footer />}
-      </div>
-      
-      {/* Onboarding overlay - sempre no topo */}
-      <OnboardingOverlay />
-      
-      {/* PWA Install Prompt - sempre visível */}
-      <PWAInstallPrompt />
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/cadastro" element={<Signup />} />
+        <Route path="/recuperar-senha" element={<ForgotPassword />} />
+        <Route path="/redefinir-senha" element={<ResetPassword />} />
+        <Route path="/termos" element={<Terms />} />
+        <Route path="/privacidade" element={<Privacy />} />
+
+        <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+          <Route path="/dashboard" element={<Home />} />
+          <Route path="/contagens" element={<Counts />} />
+          <Route path="/contagens/:id" element={<CountDetail />} />
+          <Route path="/relatorio/:id" element={<Report />} />
+          <Route path="/calendario" element={<ScheduleCalendar />} />
+          <Route path="/cronograma" element={<ScheduleConfig />} />
+          <Route path="/categorias" element={<Categories />} />
+          <Route path="/conta" element={<Account />} />
+          <Route path="/assinatura" element={<Subscription />} />
+          <Route path="/catalogo" element={<Catalog />} />
+          <Route path="/ajuda" element={<Help />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute requiredPermission={PERMISSIONS.VIEW_ADMIN_DASHBOARD}>
+                <AdminDashboard />
+              </AdminRoute>
+            }
+          />
+        </Route>
+
+        {/* Endereços antigos */}
+        <Route path="/trial-signup" element={<Navigate to="/cadastro" replace />} />
+        <Route path="/trial-welcome" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/organizacao" element={<Navigate to="/catalogo" replace />} />
+        <Route path="/notificacoes" element={<Navigate to="/conta" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </ToastProvider>
   )
 }

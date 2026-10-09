@@ -1,319 +1,280 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import {
-  archiveCount,
-  deleteCount,
-  getCounts,
-  updateCountName,
-  type Count
-} from '@/lib/db'
-
-type CountWithStore = Count & { stores: { name: string } | null }
-import { SkeletonLoader } from '@/components/SkeletonLoader'
-import { EmptyState } from '@/components/EmptyState'
-import { EmptyCountsIllustration } from '@/components/illustrations/EmptyCountsIllustration'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { MoreHorizontal, Plus, Search } from 'lucide-react'
+import { archiveCount, deleteCount, getCounts, restoreCount, updateCountName, type Count } from '@/lib/db'
+import { AccessNotice, useCanWrite } from '@/components/AccessGate'
+import ConfirmDialog from '@/components/ConfirmDialog'
+import NewCountForm from '@/components/NewCountForm'
 import { useToast } from '@/components/Toast'
 
-type StatusFilter = 'ativas' | 'em_andamento' | 'finalizada' | 'reaberta' | 'arquivada'
+type Filter = 'ativas' | 'em_andamento' | 'finalizada' | 'arquivada'
 
-const PAGE_SIZE = 10
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: 'ativas', label: 'Todas' },
+  { value: 'em_andamento', label: 'Em andamento' },
+  { value: 'finalizada', label: 'Finalizadas' },
+  { value: 'arquivada', label: 'Arquivadas' },
+]
+
+const PAGE_SIZE = 20
+
+function statusOf(status: string | null): { label: string; className: string } {
+  if (status === 'finalizada') return { label: 'Finalizada', className: 'badge badge-success' }
+  if (status === 'arquivada') return { label: 'Arquivada', className: 'badge' }
+  if (status === 'reaberta' || status === 'reavertida') return { label: 'Reaberta', className: 'badge badge-warning' }
+  return { label: 'Em andamento', className: 'badge' }
+}
 
 export default function Counts() {
-  const [items, setItems] = useState<CountWithStore[]>([])
-  const [from, setFrom] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
-  const [q, setQ] = useState('')
-  const [appliedSearch, setAppliedSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ativas')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState('')
-  const [actionId, setActionId] = useState<string | null>(null)
-  const nav = useNavigate()
   const { addToast } = useToast()
+  const canWrite = useCanWrite()
+  const [items, setItems] = useState<Count[]>([])
+  const [loading, setLoading] = useState(true)
+  const [hasMore, setHasMore] = useState(false)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<Filter>('ativas')
+  const [creating, setCreating] = useState(false)
+  const [menuId, setMenuId] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<{ id: string; nome: string } | null>(null)
+  const [toDelete, setToDelete] = useState<Count | null>(null)
+  const requestRef = useRef(0)
 
-  async function load(reset = false, nextSearch = appliedSearch, nextStatus = statusFilter) {
-    if (loading) return
-    if (!reset && done) return
-
+  async function load(reset: boolean) {
+    const request = ++requestRef.current
     setLoading(true)
     try {
-      const start = reset ? 0 : from
-      const data = await getCounts(PAGE_SIZE, start, nextSearch, nextStatus)
-
-      if (reset) {
-        setItems(data)
-        setFrom(data.length)
-      } else {
-        setItems(prev => [...prev, ...data])
-        setFrom(start + data.length)
-      }
-
-      setDone(data.length < PAGE_SIZE)
+      const from = reset ? 0 : items.length
+      // "Em andamento" inclui as reabertas: para o lojista é a mesma coisa.
+      const data = filter === 'em_andamento'
+        ? (await getCounts(PAGE_SIZE * 5, 0, query, 'ativas')).filter((c) => c.status !== 'finalizada')
+        : await getCounts(PAGE_SIZE, from, query, filter)
+      if (request !== requestRef.current) return // chegou uma busca mais nova
+      setItems(reset || filter === 'em_andamento' ? data : [...items, ...data])
+      setHasMore(filter !== 'em_andamento' && data.length === PAGE_SIZE)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao carregar contagens'
-      addToast({ type: 'error', message: 'Erro ao carregar contagens', description: message })
+      addToast({ type: 'error', message: 'Não foi possível carregar as contagens', description: err instanceof Error ? err.message : undefined })
     } finally {
-      setLoading(false)
+      if (request === requestRef.current) setLoading(false)
     }
   }
+
+  // Busca enquanto digita, com uma pequena espera.
+  useEffect(() => {
+    const timer = setTimeout(() => load(true), query ? 300 : 0)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, filter])
 
   useEffect(() => {
-    load(true, appliedSearch, statusFilter)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
-
-  function search() {
-    const nextSearch = q.trim()
-    setAppliedSearch(nextSearch)
-    setDone(false)
-    load(true, nextSearch, statusFilter)
-  }
-
-  function clearSearch() {
-    setQ('')
-    setAppliedSearch('')
-    setDone(false)
-    load(true, '', statusFilter)
-  }
-
-  function startRename(count: Count) {
-    setEditingId(count.id)
-    setEditingName(count.nome)
-  }
-
-  async function saveRename(count: Count) {
-    const nextName = editingName.trim()
-    if (!nextName || nextName === count.nome) {
-      setEditingId(null)
-      return
+    if (!menuId) return
+    const close = () => setMenuId(null)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    document.addEventListener('click', close)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('click', close)
+      document.removeEventListener('keydown', onKey)
     }
+  }, [menuId])
 
-    setActionId(count.id)
+  async function act(fn: () => Promise<void>, failMessage: string) {
     try {
-      const updated = await updateCountName(count.id, nextName)
-      setItems(prev => prev.map(item => item.id === count.id ? { ...item, ...updated } : item))
-      addToast({ type: 'success', message: 'Contagem renomeada', duration: 2000 })
-      setEditingId(null)
+      await fn()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao renomear contagem'
-      addToast({ type: 'error', message: 'Erro ao renomear', description: message })
-    } finally {
-      setActionId(null)
+      addToast({ type: 'error', message: failMessage, description: err instanceof Error ? err.message : undefined })
     }
   }
 
-  async function handleArchive(count: Count) {
-    if (!confirm(`Arquivar a contagem "${count.nome}"? Ela sairÃ¡ da lista de ativas.`)) return
+  const saveRename = () => act(async () => {
+    if (!renaming) return
+    const nome = renaming.nome.trim()
+    const current = items.find((c) => c.id === renaming.id)
+    setRenaming(null)
+    if (!nome || !current || nome === current.nome) return
+    const updated = await updateCountName(current.id, nome)
+    setItems((prev) => prev.map((c) => (c.id === current.id ? { ...c, ...updated } : c)))
+  }, 'Não foi possível renomear')
 
-    setActionId(count.id)
-    try {
-      const updated = await archiveCount(count.id)
-      if (statusFilter === 'arquivada') {
-        setItems(prev => prev.map(item => item.id === count.id ? { ...item, ...updated } : item))
-      } else {
-        setItems(prev => prev.filter(item => item.id !== count.id))
-      }
-      addToast({ type: 'info', message: 'Contagem arquivada', duration: 2000 })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao arquivar contagem'
-      addToast({ type: 'error', message: 'Erro ao arquivar', description: message })
-    } finally {
-      setActionId(null)
-    }
-  }
+  const archive = (c: Count) => act(async () => {
+    await archiveCount(c.id)
+    setItems((prev) => prev.filter((i) => i.id !== c.id))
+    addToast({ type: 'info', message: 'Contagem arquivada', description: 'Ela fica guardada em “Arquivadas”.', duration: 3000 })
+  }, 'Não foi possível arquivar')
 
-  async function handleDelete(count: Count) {
-    if (!confirm(`Excluir definitivamente a contagem "${count.nome}"? Esta aÃ§Ã£o remove planilha, entradas e resultados vinculados.`)) return
+  const restore = (c: Count) => act(async () => {
+    await restoreCount(c.id)
+    setItems((prev) => prev.filter((i) => i.id !== c.id))
+    addToast({ type: 'info', message: 'Contagem restaurada', duration: 2500 })
+  }, 'Não foi possível restaurar')
 
-    setActionId(count.id)
-    try {
-      await deleteCount(count.id)
-      setItems(prev => prev.filter(item => item.id !== count.id))
-      addToast({ type: 'info', message: 'Contagem excluÃ­da', duration: 2000 })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao excluir contagem'
-      addToast({ type: 'error', message: 'Erro ao excluir', description: message })
-    } finally {
-      setActionId(null)
-    }
-  }
-
-  const emptyCopy = getEmptyCopy(Boolean(appliedSearch), statusFilter)
+  const remove = () => act(async () => {
+    const c = toDelete
+    setToDelete(null)
+    if (!c) return
+    await deleteCount(c.id)
+    setItems((prev) => prev.filter((i) => i.id !== c.id))
+    addToast({ type: 'info', message: 'Contagem excluída', duration: 2500 })
+  }, 'Não foi possível excluir')
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Contagens</h1>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <header className="flex items-center justify-between gap-4">
+        <h1 className="page-title">Contagens</h1>
+        {canWrite && !creating && (
+          <button type="button" className="btn" onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" aria-hidden="true" /> Nova contagem
+          </button>
+        )}
+      </header>
+
+      <AccessNotice />
+      {creating && canWrite && <NewCountForm autoFocus hint={false} />}
 
       <div className="space-y-3">
-        <div className="flex gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden="true" />
           <input
-            className="input flex-1"
-            placeholder="Pesquisar por nome"
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') search()
-              if (e.key === 'Escape' && q) clearSearch()
-            }}
+            type="search"
+            className="input pl-9"
+            placeholder="Buscar pelo nome"
+            aria-label="Buscar contagem pelo nome"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
-          <button className="btn" onClick={search} disabled={loading}>Pesquisar</button>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          {filterOptions.map(option => (
+        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="Filtrar contagens">
+          {FILTERS.map((f) => (
             <button
-              key={option.value}
-              onClick={() => {
-                setStatusFilter(option.value)
-                setDone(false)
-              }}
-              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                statusFilter === option.value
-                  ? option.activeClass
-                  : option.idleClass
+              key={f.value}
+              role="tab"
+              aria-selected={filter === f.value}
+              onClick={() => setFilter(f.value)}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                filter === f.value ? 'border-ink bg-ink text-white' : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400'
               }`}
             >
-              {option.label}
+              {f.label}
             </button>
           ))}
         </div>
       </div>
 
-      <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {loading && from === 0 ? (
-          <li className="col-span-full list-none"><SkeletonLoader /></li>
-        ) : items.length === 0 ? (
-          <li className="col-span-full list-none"><EmptyState
-            title={emptyCopy.title}
-            description={emptyCopy.description}
-            illustration={<EmptyCountsIllustration />}
-            action={{
-              label: appliedSearch ? 'Limpar pesquisa' : 'Ir para dashboard',
-              onClick: () => appliedSearch ? clearSearch() : nav('/dashboard')
-            }}
-          /></li>
-        ) : (
-          items.map(it => {
-            const statusBadge = getStatusBadge(it.status)
-            const busy = actionId === it.id
-
+      {loading && items.length === 0 ? (
+        <div className="space-y-2" aria-busy="true">
+          <div className="skeleton h-16" /><div className="skeleton h-16" /><div className="skeleton h-16" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-zinc-300 px-6 py-12 text-center">
+          <p className="font-medium">{emptyTitle(query, filter)}</p>
+          <p className="mt-1 text-sm text-zinc-500">{emptyText(query, filter)}</p>
+          {!query && filter === 'ativas' && canWrite && !creating && (
+            <button type="button" className="btn mt-5" onClick={() => setCreating(true)}>Criar a primeira contagem</button>
+          )}
+        </div>
+      ) : (
+        <ul className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white">
+          {items.map((c) => {
+            const status = statusOf(c.status)
+            const done = c.status === 'finalizada'
+            const href = done ? `/relatorio/${c.id}` : `/contagens/${c.id}`
             return (
-              <li key={it.id} className="card space-y-3 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    {editingId === it.id ? (
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          className="input flex-1"
-                          value={editingName}
-                          maxLength={100}
-                          onChange={e => setEditingName(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') saveRename(it)
-                            if (e.key === 'Escape') setEditingId(null)
-                          }}
-                          autoFocus
-                        />
-                        <div className="flex gap-2">
-                          <button className="btn" onClick={() => saveRename(it)} disabled={busy}>Salvar</button>
-                          <button className="badge" onClick={() => setEditingId(null)} disabled={busy}>Cancelar</button>
-                        </div>
+              <li key={c.id} className="relative flex items-center gap-2 pr-2">
+                {renaming?.id === c.id ? (
+                  <form className="flex flex-1 gap-2 px-4 py-3" onSubmit={(e) => { e.preventDefault(); void saveRename() }}>
+                    <input
+                      className="input flex-1"
+                      aria-label="Novo nome da contagem"
+                      maxLength={100}
+                      autoFocus
+                      value={renaming.nome}
+                      onChange={(e) => setRenaming({ id: c.id, nome: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null) }}
+                    />
+                    <button type="submit" className="btn">Salvar</button>
+                  </form>
+                ) : (
+                  <>
+                    <Link to={c.status === 'arquivada' ? '#' : href} onClick={(e) => { if (c.status === 'arquivada') e.preventDefault() }}
+                      className={`flex min-w-0 flex-1 items-center justify-between gap-3 py-4 pl-4 sm:pl-5 ${c.status === 'arquivada' ? 'cursor-default' : ''}`}>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{c.nome}</p>
+                        <p className="text-xs text-zinc-500">
+                          {new Date(c.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </p>
                       </div>
-                    ) : (
-                      <>
-                        <div className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{it.nome}</div>
-                        {it.stores?.name && (
-                          <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">📍 {it.stores.name}</div>
-                        )}
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">{new Date(it.created_at).toLocaleString()}</div>
-                      </>
+                      <span className={`${status.className} shrink-0`}>{status.label}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-ink"
+                      aria-label={`Mais opções para ${c.nome}`}
+                      aria-haspopup="menu"
+                      aria-expanded={menuId === c.id}
+                      onClick={(e) => { e.stopPropagation(); setMenuId(menuId === c.id ? null : c.id) }}
+                    >
+                      <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    {menuId === c.id && (
+                      <div role="menu" className="absolute right-2 top-12 z-20 w-44 overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg animate-scale-in">
+                        {done && <MenuLink to={`/contagens/${c.id}`}>Ver itens contados</MenuLink>}
+                        <MenuItem onClick={() => setRenaming({ id: c.id, nome: c.nome })}>Renomear</MenuItem>
+                        {c.status === 'arquivada'
+                          ? <MenuItem onClick={() => restore(c)}>Restaurar</MenuItem>
+                          : <MenuItem onClick={() => archive(c)}>Arquivar</MenuItem>}
+                        <MenuItem danger onClick={() => setToDelete(c)}>Excluir</MenuItem>
+                      </div>
                     )}
-                  </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${statusBadge.bg} ${statusBadge.text}`}>
-                    {statusBadge.label}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link className="badge" to={`/contagens/${it.id}`}>Abrir</Link>
-                  {editingId !== it.id && (
-                    <button className="badge" onClick={() => startRename(it)} disabled={busy}>Renomear</button>
-                  )}
-                  {it.status !== 'arquivada' && (
-                    <button className="badge" onClick={() => handleArchive(it)} disabled={busy}>Arquivar</button>
-                  )}
-                  <button className="badge bg-red-600 hover:bg-red-700 text-white" onClick={() => handleDelete(it)} disabled={busy}>
-                    Excluir
-                  </button>
-                </div>
+                  </>
+                )}
               </li>
             )
-          })
-        )}
-      </ul>
-
-      {!done && items.length > 0 && (
-        <div className="text-center">
-          <button className="btn" onClick={() => load(false)} disabled={loading}>
-            {loading ? 'Carregando...' : 'Carregar mais'}
-          </button>
-        </div>
+          })}
+        </ul>
       )}
-      {done && items.length > 0 && <div className="text-center text-sm text-zinc-500">Fim da lista</div>}
+
+      {hasMore && (
+        <button type="button" className="btn btn-secondary w-full" onClick={() => load(false)} disabled={loading}>
+          {loading ? 'Carregando…' : 'Carregar mais'}
+        </button>
+      )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        title="Excluir esta contagem?"
+        description={toDelete ? `“${toDelete.nome}” será apagada com a planilha, os itens contados e o relatório. Isso não pode ser desfeito.` : ''}
+        confirmLabel="Excluir"
+        destructive
+        onConfirm={remove}
+        onCancel={() => setToDelete(null)}
+      />
     </div>
   )
 }
 
-const filterOptions: Array<{
-  value: StatusFilter
-  label: string
-  activeClass: string
-  idleClass: string
-}> = [
-  { value: 'ativas', label: 'Ativas', activeClass: 'bg-zinc-900 text-white', idleClass: 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200' },
-  { value: 'em_andamento', label: 'Em andamento', activeClass: 'bg-blue-600 text-white', idleClass: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
-  { value: 'finalizada', label: 'Finalizadas', activeClass: 'bg-green-600 text-white', idleClass: 'bg-green-100 text-green-700 hover:bg-green-200' },
-  { value: 'reaberta', label: 'Reabertas', activeClass: 'bg-purple-600 text-white', idleClass: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
-  { value: 'arquivada', label: 'Arquivadas', activeClass: 'bg-zinc-600 text-white', idleClass: 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200' }
-]
-
-function getStatusBadge(status: string | null) {
-  const badges: Record<string, { bg: string; text: string; label: string }> = {
-    em_andamento: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Em andamento' },
-    finalizada: { bg: 'bg-green-100', text: 'text-green-800', label: 'Finalizada' },
-    reaberta: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Reaberta' },
-    reavertida: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Reaberta' },
-    arquivada: { bg: 'bg-zinc-100', text: 'text-zinc-800', label: 'Arquivada' }
-  }
-
-  return badges[status || ''] || { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Pendente' }
+function MenuItem({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+  return (
+    <button type="button" role="menuitem" onClick={onClick}
+      className={`block w-full px-3 py-2.5 text-left text-sm hover:bg-zinc-50 ${danger ? 'text-red-600' : 'text-ink'}`}>
+      {children}
+    </button>
+  )
 }
 
-function getEmptyCopy(hasSearch: boolean, status: StatusFilter) {
-  if (hasSearch) {
-    return {
-      title: 'Nenhuma contagem encontrada',
-      description: 'Tente outro nome ou limpe a pesquisa para ver todas as contagens deste filtro.'
-    }
-  }
+function MenuLink({ children, to }: { children: React.ReactNode; to: string }) {
+  return <Link role="menuitem" to={to} className="block px-3 py-2.5 text-sm hover:bg-zinc-50">{children}</Link>
+}
 
-  if (status === 'arquivada') {
-    return {
-      title: 'Nenhuma contagem arquivada',
-      description: 'As contagens arquivadas ficam guardadas aqui quando voce retira itens da lista principal.'
-    }
-  }
+function emptyTitle(query: string, filter: Filter) {
+  if (query) return 'Nenhuma contagem com esse nome'
+  if (filter === 'arquivada') return 'Nada arquivado'
+  if (filter === 'finalizada') return 'Nenhuma contagem finalizada'
+  if (filter === 'em_andamento') return 'Nenhuma contagem em andamento'
+  return 'Você ainda não fez nenhuma contagem'
+}
 
-  if (status !== 'ativas') {
-    return {
-      title: 'Nenhuma contagem neste status',
-      description: 'Troque o filtro para ver outras contagens ou crie uma nova pelo dashboard.'
-    }
-  }
-
-  return {
-    title: 'Nenhuma contagem ainda',
-    description: 'Crie sua primeira contagem no dashboard para comecar.'
-  }
+function emptyText(query: string, filter: Filter) {
+  if (query) return 'Confira a grafia ou limpe a busca.'
+  if (filter === 'arquivada') return 'Contagens arquivadas saem da lista principal e ficam guardadas aqui.'
+  if (filter === 'ativas') return 'Crie uma, importe a planilha do estoque e comece a bipar.'
+  return 'Troque o filtro para ver as outras.'
 }

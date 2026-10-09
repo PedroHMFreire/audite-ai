@@ -3,7 +3,7 @@ import { InputValidator, SecurityLogger } from './security'
 import { enqueueEntry } from './offlineQueue'
 
 export type CountStatus = 'em_andamento' | 'finalizada' | 'reaberta' | 'reavertida' | 'arquivada'
-export type Count = { id: string; user_id: string; store_id: string | null; nome: string; status: CountStatus | string | null; created_at: string }
+export type Count = { id: string; user_id: string; store_id: string | null; nome: string; status: CountStatus | string | null; created_at: string; finished_at?: string | null }
 export type PlanItem = { id?: string; count_id: string; codigo: string; nome: string; saldo: number }
 export type ManualEntry = { id?: string; count_id: string; codigo: string; qty?: number; created_at?: string }
 export type Result = { id?: string; count_id: string; codigo: string; status: 'regular'|'excesso'|'falta'; manual_qtd: number; saldo_qtd: number; nome_produto: string }
@@ -167,58 +167,35 @@ export async function createCount(nome: string, storeName: string | null) {
   return data as Count
 }
 
+const MAX_PLAN_ITEMS = 20000
+
 export async function savePlanItems(count_id: string, items: { codigo: string; nome: string; saldo: number }[]) {
-  // Validação de UUID
   if (!InputValidator.uuid(count_id)) {
     SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID', { count_id })
     throw new Error('ID da contagem inválido')
   }
-  
-  if (!items || !InputValidator.nonEmptyArray(items)) {
-    throw new Error('Lista de itens não pode estar vazia')
+
+  validatePlanRows(items)
+
+  const rows = items.map((r) => ({
+    count_id,
+    codigo: InputValidator.sanitizeText(r.codigo),
+    nome: InputValidator.sanitizeText(r.nome || ''),
+    saldo: Math.max(0, r.saldo),
+  }))
+
+  // Em blocos: uma planilha grande em uma única requisição estoura o limite do servidor.
+  const CHUNK = 1000
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await supabase.from('plan_items').insert(rows.slice(i, i + CHUNK))
+    if (error) throw error
   }
-  
-  if (items.length > 10000) {
-    throw new Error('Limite de 10000 itens por contagem excedido')
-  }
-  
-  // Validação e sanitização de cada item
-  const rows = items.map((r, idx) => {
-    const sanitizedCodigo = InputValidator.sanitizeText(r.codigo.trim())
-    const sanitizedNome = InputValidator.sanitizeText(r.nome.trim())
-    
-    if (!sanitizedCodigo || sanitizedCodigo.length === 0) {
-      throw new Error(`Item ${idx + 1}: Código não pode estar vazio`)
-    }
-    
-    if (!InputValidator.productCode(sanitizedCodigo)) {
-      throw new Error(`Item ${idx + 1}: Código de produto inválido`)
-    }
-    
-    if (!sanitizedNome || sanitizedNome.length === 0) {
-      throw new Error(`Item ${idx + 1}: Nome do produto não pode estar vazio`)
-    }
-    
-    if (!InputValidator.quantity(r.saldo)) {
-      throw new Error(`Item ${idx + 1}: Quantidade inválida (deve ser 0-999999)`)
-    }
-    
-    return { 
-      count_id, 
-      codigo: sanitizedCodigo, 
-      nome: sanitizedNome, 
-      saldo: Math.max(0, r.saldo) 
-    }
-  })
-  
-  const { error } = await supabase.from('plan_items').insert(rows)
-  if (error) throw error
 }
 
 export async function replacePlanItems(count_id: string, items: { codigo: string; nome: string; saldo: number }[]) {
   if (!InputValidator.uuid(count_id)) {
     SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID', { count_id })
-    throw new Error('ID da contagem invÃ¡lido')
+    throw new Error('ID da contagem inválido')
   }
 
   const user_id = await getCurrentUserId()
@@ -231,7 +208,7 @@ export async function replacePlanItems(count_id: string, items: { codigo: string
 
   if (countError || !countData) {
     SecurityLogger.logSuspiciousActivity('UNAUTHORIZED_COUNT_ACCESS', { count_id, user_id })
-    throw new Error('VocÃª nÃ£o tem permissÃ£o para modificar esta contagem')
+    throw new Error('Você não tem permissão para modificar esta contagem')
   }
 
   if (countData.status === 'finalizada' || countData.status === 'arquivada') {
@@ -248,21 +225,24 @@ export async function replacePlanItems(count_id: string, items: { codigo: string
 
 function validatePlanRows(items: { codigo: string; nome: string; saldo: number }[]) {
   if (!items || !InputValidator.nonEmptyArray(items)) {
-    throw new Error('Lista de itens nÃ£o pode estar vazia')
+    throw new Error('A planilha não tem nenhum produto. Confira se as colunas são código, nome e saldo.')
   }
 
-  if (items.length > 10000) {
-    throw new Error('Limite de 10000 itens por contagem excedido')
+  if (items.length > MAX_PLAN_ITEMS) {
+    throw new Error(`A planilha tem ${items.length.toLocaleString('pt-BR')} produtos; o limite por contagem é ${MAX_PLAN_ITEMS.toLocaleString('pt-BR')}.`)
   }
 
   items.forEach((r, idx) => {
-    const sanitizedCodigo = InputValidator.sanitizeText(r.codigo.trim())
-    const sanitizedNome = InputValidator.sanitizeText(r.nome.trim())
-
-    if (!sanitizedCodigo) throw new Error(`Item ${idx + 1}: CÃ³digo nÃ£o pode estar vazio`)
-    if (!InputValidator.productCode(sanitizedCodigo)) throw new Error(`Item ${idx + 1}: CÃ³digo de produto invÃ¡lido`)
-    if (!sanitizedNome) throw new Error(`Item ${idx + 1}: Nome do produto nÃ£o pode estar vazio`)
-    if (!InputValidator.quantity(r.saldo)) throw new Error(`Item ${idx + 1}: Quantidade invÃ¡lida (deve ser 0-999999)`)
+    const linha = idx + 1
+    if (!InputValidator.productCode(InputValidator.sanitizeText(r.codigo))) {
+      throw new Error(`Produto ${linha}: código vazio ou longo demais (máximo de 60 caracteres).`)
+    }
+    if (InputValidator.sanitizeText(r.nome || '').length > 200) {
+      throw new Error(`Produto ${linha}: nome longo demais (máximo de 200 caracteres).`)
+    }
+    if (!InputValidator.quantity(r.saldo)) {
+      throw new Error(`Produto ${linha}: saldo inválido (use um número de 0 a 999.999).`)
+    }
   })
 }
 
@@ -307,7 +287,7 @@ export async function listManualEntries(count_id: string) {
 export async function updateManualEntry(id: string, changes: { codigo?: string; qty?: number }) {
   if (!InputValidator.uuid(id)) {
     SecurityLogger.logSuspiciousActivity('INVALID_MANUAL_ENTRY_ID', { id })
-    throw new Error('ID da entrada invÃ¡lido')
+    throw new Error('ID da entrada inválido')
   }
 
   const cleanUpdates: { codigo?: string; qty?: number } = {}
@@ -315,14 +295,14 @@ export async function updateManualEntry(id: string, changes: { codigo?: string; 
   if (changes.codigo !== undefined) {
     const sanitizedCodigo = InputValidator.sanitizeText(changes.codigo.trim())
     if (!InputValidator.productCode(sanitizedCodigo)) {
-      throw new Error('CÃ³digo de produto invÃ¡lido')
+      throw new Error('Código de produto inválido')
     }
     cleanUpdates.codigo = sanitizedCodigo
   }
 
   if (changes.qty !== undefined) {
     if (!InputValidator.positiveInteger(changes.qty) || !InputValidator.quantity(changes.qty)) {
-      throw new Error('Quantidade invÃ¡lida')
+      throw new Error('Quantidade inválida')
     }
     cleanUpdates.qty = changes.qty
   }
@@ -369,7 +349,7 @@ export async function updateManualEntry(id: string, changes: { codigo?: string; 
 export async function deleteManualEntry(id: string) {
   if (!InputValidator.uuid(id)) {
     SecurityLogger.logSuspiciousActivity('INVALID_MANUAL_ENTRY_ID', { id })
-    throw new Error('ID da entrada invÃ¡lido')
+    throw new Error('ID da entrada inválido')
   }
 
   const { error } = await supabase.from('manual_entries').delete().eq('id', id)
@@ -442,13 +422,13 @@ export async function getCounts(
 export async function updateCountName(count_id: string, nome: string) {
   if (!InputValidator.uuid(count_id)) {
     SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_RENAME', { count_id })
-    throw new Error('ID da contagem invÃ¡lido')
+    throw new Error('ID da contagem inválido')
   }
 
   const user_id = await getCurrentUserId()
   const sanitizedNome = InputValidator.sanitizeText(nome)
   if (!sanitizedNome || sanitizedNome.length < 1 || sanitizedNome.length > 100) {
-    throw new Error('Nome da contagem invÃ¡lido (1-100 caracteres)')
+    throw new Error('Nome da contagem inválido (1-100 caracteres)')
   }
 
   const { data, error } = await supabase
@@ -466,7 +446,7 @@ export async function updateCountName(count_id: string, nome: string) {
 export async function archiveCount(count_id: string) {
   if (!InputValidator.uuid(count_id)) {
     SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_ARCHIVE', { count_id })
-    throw new Error('ID da contagem invÃ¡lido')
+    throw new Error('ID da contagem inválido')
   }
 
   const user_id = await getCurrentUserId()
@@ -482,10 +462,29 @@ export async function archiveCount(count_id: string) {
   return data as Count
 }
 
+/** Tira a contagem do arquivo: volta a "finalizada" se tinha relatório, senão fica aberta. */
+export async function restoreCount(count_id: string) {
+  if (!InputValidator.uuid(count_id)) throw new Error('ID da contagem inválido')
+  const user_id = await getCurrentUserId()
+  const { count: resultCount } = await supabase
+    .from('results')
+    .select('id', { count: 'exact', head: true })
+    .eq('count_id', count_id)
+  const { data, error } = await supabase
+    .from('counts')
+    .update({ status: (resultCount || 0) > 0 ? 'finalizada' : 'reaberta' })
+    .eq('id', count_id)
+    .eq('user_id', user_id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as Count
+}
+
 export async function deleteCount(count_id: string) {
   if (!InputValidator.uuid(count_id)) {
     SecurityLogger.logSuspiciousActivity('INVALID_COUNT_ID_DELETE', { count_id })
-    throw new Error('ID da contagem invÃ¡lido')
+    throw new Error('ID da contagem inválido')
   }
 
   const user_id = await getCurrentUserId()
@@ -556,11 +555,11 @@ export async function getResultsByCount(count_id: string) {
 
 export type Motivo = 'falha_troca' | 'erro_insercao' | 'duplicada_sistema' | 'codigo_errado' | 'outra'
 export const MOTIVO_LABELS: Record<Motivo, string> = {
-  falha_troca: 'Falha na Troca',
-  erro_insercao: 'Erro de Inserção',
-  duplicada_sistema: 'Duplicada no Sistema',
-  codigo_errado: 'Código Errado',
-  outra: 'Outra',
+  falha_troca: 'Troca não registrada',
+  erro_insercao: 'Erro de lançamento',
+  duplicada_sistema: 'Duplicada no sistema',
+  codigo_errado: 'Código errado',
+  outra: 'Outro motivo',
 }
 export type DivergenceJustification = {
   id?: string
@@ -638,6 +637,13 @@ export async function reopenCount(count_id: string) {
     throw new Error('Sem permissão para reabrir esta contagem')
   }
   
+  // Sem acesso ativo a contagem não poderia ser finalizada de novo; reabrir
+  // apagaria o relatório sem volta.
+  const { data: access } = await supabase.rpc('my_access')
+  if (access && access.has_access === false) {
+    throw new Error('Seu acesso está inativo. Assine para reabrir e continuar contando.')
+  }
+
   // Limpar resultados anteriores
   const { error: delErr } = await supabase
     .from('results')
@@ -662,7 +668,6 @@ export async function reopenCount(count_id: string) {
     throw new Error('Erro ao reabrir contagem: ' + updateErr.message)
   }
   
-  console.log(`Contagem reaberta com sucesso: ${count_id}`)
   return updated as Count
 }
 

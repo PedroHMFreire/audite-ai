@@ -1,158 +1,145 @@
 import jsPDF from 'jspdf'
-import type { Result, DivergenceJustification } from './db'
+import type { Result } from './db'
 import { MOTIVO_LABELS } from './db'
+import type { ReportData } from './reportExport'
 
-export function generateReportPDF(opts: {
-  logoDataUrl?: string // PNG/JPEG dataURL
-  countName: string
-  storeName?: string
-  date: string
-  results: Result[]
-  justifications?: Map<string, DivergenceJustification>
-}): Blob {
-  const { logoDataUrl, countName, storeName, date, results, justifications } = opts
+/** Relatório da contagem em PDF (A4): resumo, depois faltas, sobras e certos. */
+export function generateReportPDF(d: ReportData): Blob {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-
-  function justificativaLabel(codigo: string): string {
-    const j = justifications?.get(codigo)
-    if (!j) return 'Pendente'
-    const label = MOTIVO_LABELS[j.motivo]
-    return j.observacao ? `${label} — ${j.observacao}` : label
-  }
-
-  // Layout
-  const marginLeft = 40
-  const marginRight = 40
+  const margin = 40
   const pageWidth = doc.internal.pageSize.getWidth()
-  const usableRight = pageWidth - marginRight
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const right = pageWidth - margin
+  const lineHeight = 13
 
-  // Colunas (Nome mais largo; Justificativa some espaço da coluna Nome)
-  const xCode   = marginLeft
-  const wCode   = 90
-  const xName   = xCode + wCode + 10
-  const wName   = 170
-  const xManual = xName + wName + 10
-  const wManual = 45
-  const xSaldo  = xManual + wManual + 10
-  const wSaldo  = 45
-  const xJust   = xSaldo + wSaldo + 10
-  const wJust   = usableRight - xJust
+  const xCode = margin
+  const wCode = 100
+  const xName = xCode + wCode + 8
+  const wName = 170
+  const xSys = xName + wName + 8
+  const xCnt = xSys + 48
+  const xDiff = xCnt + 48
+  const xJust = xDiff + 44
+  const wJust = right - xJust
 
-  // ===== Cabeçalho =====
-  let y = 40
-  if (logoDataUrl && /^data:image\/(png|jpeg);base64,/.test(logoDataUrl)) {
-    try { doc.addImage(logoDataUrl, 'PNG', marginLeft, y, 120, 40) } catch {}
+  const nome = (r: Result) => r.nome_produto || d.names?.get(r.codigo) || ''
+  const motivo = (codigo: string) => {
+    const j = d.justifications?.get(codigo)
+    if (!j) return ''
+    const label = MOTIVO_LABELS[j.motivo]
+    return j.observacao ? `${label}: ${j.observacao}` : label
+  }
+  const by = (s: Result['status']) => d.results.filter((r) => r.status === s)
+  const units = (rows: Result[]) => rows.reduce((a, r) => a + Math.abs((r.manual_qtd || 0) - (r.saldo_qtd || 0)), 0)
+
+  // Cabeçalho
+  let y = margin + 8
+  doc.setFont('helvetica', 'bold').setFontSize(18).setTextColor(22)
+  doc.text('Relatório de contagem', margin, y)
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(110)
+  doc.text('Audite', right, y, { align: 'right' })
+  y += 22
+  doc.setFontSize(11).setTextColor(22)
+  doc.text(d.countName || 'Contagem', margin, y)
+  y += 15
+  doc.setFontSize(10).setTextColor(110)
+  doc.text([d.storeName, d.date].filter(Boolean).join('  ·  '), margin, y)
+  y += 22
+
+  // Resumo
+  const faltas = by('falta')
+  const sobras = by('excesso')
+  const certos = by('regular')
+  const boxes: [string, string][] = [
+    ['Produtos conferidos', String(d.results.length)],
+    ['Certos', String(certos.length)],
+    ['Faltas', `${faltas.length} (${units(faltas)} peças)`],
+    ['Sobras', `${sobras.length} (${units(sobras)} peças)`],
+  ]
+  const boxW = (right - margin) / boxes.length
+  doc.setDrawColor(220)
+  doc.line(margin, y, right, y)
+  boxes.forEach(([label, value], i) => {
+    const x = margin + i * boxW
+    doc.setFontSize(8).setTextColor(110).text(label.toUpperCase(), x, y + 16)
+    doc.setFontSize(12).setTextColor(22).text(value, x, y + 33)
+  })
+  y += 46
+  doc.line(margin, y, right, y)
+  y += 26
+
+  function tableHeader(title: string, withMotivo: boolean) {
+    doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(22)
+    doc.text(title, margin, y)
+    y += 16
+    doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(110)
+    doc.text('CÓDIGO', xCode, y)
+    doc.text('PRODUTO', xName, y)
+    doc.text('SISTEMA', xSys, y)
+    doc.text('CONTADO', xCnt, y)
+    doc.text('DIF.', xDiff, y)
+    if (withMotivo) doc.text('MOTIVO', xJust, y)
+    y += 6
+    doc.setDrawColor(200)
+    doc.line(margin, y, right, y)
+    y += 13
   }
 
-  doc.setFontSize(18)
-  doc.text('Relatório de Auditoria - AUDITE.AI', marginLeft, y + 70)
+  function clip(text: string, width: number, maxLines: number): string[] {
+    const lines: string[] = doc.splitTextToSize(text, width)
+    if (lines.length <= maxLines) return lines
+    const kept = lines.slice(0, maxLines)
+    kept[maxLines - 1] = String(kept[maxLines - 1]).replace(/.{0,2}$/, '…')
+    return kept
+  }
 
-  doc.setFontSize(12)
-  const lineStep = 20
-  let headerBottom = y + 90
-  doc.text(`Contagem: ${countName}`, marginLeft, headerBottom)
-  headerBottom += lineStep
-
-  // sempre mostramos Loja (pode ser "—")
-  doc.text(`Loja: ${storeName ?? '—'}`, marginLeft, headerBottom)
-  headerBottom += lineStep
-
-  doc.text(`Data: ${date}`, marginLeft, headerBottom)
-  headerBottom += lineStep
-
-  // Empurra a tabela para baixo (correção do overlap)
-  let pageY = headerBottom + 10
-  const lineHeight = 14
-
-  // ===== Tabela =====
-  const sections: { title: string; key: 'regular'|'excesso'|'falta' }[] = [
-    { title: 'Produtos Regulares', key: 'regular' },
-    { title: 'Produtos em Excesso', key: 'excesso' },
-    { title: 'Produtos em Falta', key: 'falta' },
+  const sections: [string, Result[], boolean][] = [
+    [`Faltas (${faltas.length})`, faltas, true],
+    [`Sobras (${sobras.length})`, sobras, true],
+    [`Certos (${certos.length})`, certos, false],
   ]
 
-  function printTableHeader(title: string, showJust: boolean) {
-    doc.setFontSize(14)
-    doc.text(title, marginLeft, pageY)
-    pageY += 12
-    doc.setFontSize(10)
-    doc.text('Código', xCode, pageY)
-    doc.text('Nome',   xName, pageY)
-    doc.text('Manual', xManual, pageY)
-    doc.text('Saldo',  xSaldo, pageY)
-    if (showJust) doc.text('Justificativa', xJust, pageY)
-    pageY += 10
-    doc.setDrawColor(200)
-    doc.line(marginLeft, pageY, usableRight, pageY)
-    pageY += 10
-  }
+  for (const [title, rows, withMotivo] of sections) {
+    if (rows.length === 0) continue
+    if (y + 70 > pageHeight - margin) { doc.addPage(); y = margin }
+    tableHeader(title, withMotivo)
 
-  function addPageIfNeeded(minSpace: number, headerTitle: string, showJust: boolean) {
-    const pageHeight = doc.internal.pageSize.getHeight()
-    if (pageY + minSpace > pageHeight - 40) {
-      doc.addPage()
-      pageY = 40
-      printTableHeader(headerTitle, showJust)
-    }
-  }
-
-  for (const sec of sections) {
-    const showJust = sec.key !== 'regular'
-
-    // Cabeçalho da seção
-    addPageIfNeeded(60, sec.title, showJust)
-    printTableHeader(sec.title, showJust)
-
-    const rows = results.filter(r => r.status === sec.key)
     for (const r of rows) {
-      const codigo = r.codigo || '-'
-      const nome   = r.nome_produto || '-'
-      const manual = String(r.manual_qtd ?? 0)
-      const saldo  = String(r.saldo_qtd ?? 0)
+      doc.setFontSize(9)
+      const nameLines = clip(nome(r) || '—', wName, 2)
+      const codeLines = clip(String(r.codigo), wCode, 2)
+      const justLines = withMotivo ? clip(motivo(r.codigo), wJust, 3) : []
+      const rowHeight = lineHeight * Math.max(1, nameLines.length, codeLines.length, justLines.length)
 
-      // Quebra do nome em até 2 linhas
-      const split = doc.splitTextToSize(nome, wName)
-      let nameLines = split.slice(0, 2)
-      if (split.length > 2) {
-        const last = nameLines[1]
-        const clipped = doc.splitTextToSize(last + '…', wName)[0]
-        nameLines[1] = clipped.endsWith('…') ? clipped : (clipped + '…')
+      if (y + rowHeight > pageHeight - margin) {
+        doc.addPage()
+        y = margin
+        tableHeader(`${title} — continuação`, withMotivo)
+        doc.setFontSize(9)
       }
 
-      // Quebra da justificativa em até 3 linhas (só para excesso/falta)
-      let justLines: string[] = []
-      if (showJust) {
-        const justSplit = doc.splitTextToSize(justificativaLabel(codigo), wJust)
-        justLines = justSplit.slice(0, 3)
-        if (justSplit.length > 3) {
-          const last = justLines[2]
-          const clipped = doc.splitTextToSize(last + '…', wJust)[0]
-          justLines[2] = clipped.endsWith('…') ? clipped : (clipped + '…')
-        }
-      }
+      const diff = (r.manual_qtd || 0) - (r.saldo_qtd || 0)
+      doc.setTextColor(22)
+      doc.text(codeLines, xCode, y)
+      doc.text(nameLines, xName, y)
+      doc.text(String(r.saldo_qtd ?? 0), xSys, y)
+      doc.text(String(r.manual_qtd ?? 0), xCnt, y)
+      doc.text(diff === 0 ? '0' : diff > 0 ? `+${diff}` : String(diff), xDiff, y)
+      if (justLines.length) { doc.setTextColor(90); doc.text(justLines, xJust, y) }
 
-      const rowHeight = lineHeight * Math.max(1, nameLines.length, justLines.length) + 4
-      addPageIfNeeded(rowHeight + 6, sec.title, showJust)
-
-      // Valores
-      doc.setFontSize(10)
-      doc.text(codigo, xCode, pageY)
-      doc.text(manual, xManual, pageY)
-      doc.text(saldo,  xSaldo, pageY)
-      for (let i = 0; i < nameLines.length; i++) {
-        doc.text(String(nameLines[i]), xName, pageY + (i * lineHeight), { maxWidth: wName })
-      }
-      for (let i = 0; i < justLines.length; i++) {
-        doc.text(String(justLines[i]), xJust, pageY + (i * lineHeight), { maxWidth: wJust })
-      }
-
-      pageY += rowHeight
-      doc.setDrawColor(245)
-      doc.line(marginLeft, pageY, usableRight, pageY)
-      pageY += 6
+      y += rowHeight + 3
+      doc.setDrawColor(238)
+      doc.line(margin, y - 9, right, y - 9)
     }
+    y += 18
+  }
 
-    pageY += 12
+  // Rodapé com numeração
+  const pages = doc.getNumberOfPages()
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8).setTextColor(150)
+    doc.text(`Página ${i} de ${pages}`, right, pageHeight - 20, { align: 'right' })
   }
 
   return doc.output('blob')
