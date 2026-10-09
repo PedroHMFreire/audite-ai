@@ -11,7 +11,7 @@
 //  - Supabase/API: NÃO intercepta (evita servir dados velhos).
 //  - CACHE_NAME versionado: o activate apaga os caches antigos.
 
-const CACHE_NAME = 'audite-ai-v2';
+const CACHE_NAME = 'audite-v3';
 const SHELL = '/index.html';
 
 const PRECACHE = [
@@ -26,23 +26,19 @@ const PRECACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  console.log('[ServiceWorker] Installing v2…');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE).catch((err) => {
-        console.warn('[ServiceWorker] Pré-cache parcial:', err);
       }))
       .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[ServiceWorker] Activating v2…');
   event.waitUntil(
     caches.keys()
       .then((names) => Promise.all(
         names.filter((n) => n !== CACHE_NAME).map((n) => {
-          console.log('[ServiceWorker] Apagando cache antigo:', n);
           return caches.delete(n);
         })
       ))
@@ -61,10 +57,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Supabase / API: deixa passar direto (sem cache → nunca dado velho).
-  if (url.origin === 'https://rwbomcidvezohsgojbgz.supabase.co' || url.pathname.includes('/api/')) {
-    return;
-  }
+  // Só cuida do que é do próprio site. Supabase, Stripe, fontes e qualquer
+  // outra origem passam direto, sem cache — nunca serve dado velho da API.
+  if (url.origin !== self.location.origin) return;
 
   // Navegações (HTML do SPA): NETWORK-FIRST.
   const isNavigation = request.mode === 'navigate' ||
@@ -158,5 +153,3 @@ self.addEventListener('push', (event) => {
     })
   );
 });
-
-console.log('[ServiceWorker] Loaded v2');

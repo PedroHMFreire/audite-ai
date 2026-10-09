@@ -16,8 +16,8 @@ export default defineConfig({
           react: ['react', 'react-dom', 'react-router-dom'],
           // Supabase separado (carrega quando necessário)
           supabase: ['@supabase/supabase-js'],
-          // PDF e captura de tela separados (só carregam quando você for usar relatório/PDF)
-          pdf: ['jspdf', 'html2canvas', 'dompurify'],
+          // PDF separado (só carrega ao exportar o relatório)
+          pdf: ['jspdf'],
         },
       },
     },

@@ -198,7 +198,7 @@ export default function ScheduleConfig() {
           </summary>
           <div className="mt-3 space-y-3">
             {configs.map(config => (
-              <div key={config.id} className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-3">
+              <div key={config.id} className="rounded-xl border border-zinc-100 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -212,8 +212,8 @@ export default function ScheduleConfig() {
                     </div>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
-                    <button className="rounded-lg px-3 min-h-9 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" onClick={() => setRegenConfig(config)} disabled={generating}>Regenerar</button>
-                    <button className="rounded-lg px-3 min-h-9 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" onClick={() => setEditingConfig(config)}>Editar</button>
+                    <button className="rounded-lg px-3 min-h-9 text-sm text-zinc-600 hover:bg-zinc-100 transition" onClick={() => setRegenConfig(config)} disabled={generating}>Regenerar</button>
+                    <button className="rounded-lg px-3 min-h-9 text-sm text-zinc-600 hover:bg-zinc-100 transition" onClick={() => setEditingConfig(config)}>Editar</button>
                     <button className="rounded-lg px-3 min-h-9 text-sm text-danger hover:bg-danger/10 transition" onClick={() => setDeletingConfig(config)}>Excluir</button>
                   </div>
                 </div>
@@ -230,7 +230,7 @@ export default function ScheduleConfig() {
             className="card w-full max-w-lg my-8 max-h-[90vh] overflow-y-auto space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Novo cronograma</h3>
-              <button type="button" onClick={() => setShowCreateForm(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg leading-none">✕</button>
+              <button type="button" onClick={() => setShowCreateForm(false)} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">✕</button>
             </div>
 
             <div>
@@ -273,8 +273,8 @@ export default function ScheduleConfig() {
               </div>
             </div>
 
-            <p className="text-sm text-muted border-t border-zinc-100 dark:border-zinc-800 pt-3">
-              <span className="text-zinc-900 dark:text-white font-medium">{totalCounts}</span> contagens
+            <p className="text-sm text-muted border-t border-zinc-100 pt-3">
+              <span className="text-zinc-900 font-medium">{totalCounts}</span> contagens
               <span className="mx-1">·</span>{formData.sectors_per_week}/semana × {formData.total_weeks} sem.
               {formData.work_days.length > 0 && <><span className="mx-1">·</span>{formData.work_days.map(dayFull).join(', ')}</>}
             </p>
@@ -286,7 +286,7 @@ export default function ScheduleConfig() {
             </div>
 
             {categories.length === 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
+              <p className="text-xs text-amber-600">
                 Nenhuma categoria cadastrada. <Link to="/categorias" className="link">Cadastre categorias</Link> para começar.
               </p>
             )}

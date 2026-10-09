@@ -403,7 +403,7 @@ export default function CountDetail() {
     return (
       <div className="card text-center py-8">
         <div className="text-danger mb-2 font-medium">Erro</div>
-        <div className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">{error}</div>
+        <div className="text-sm text-zinc-600 mb-4">{error}</div>
         <Link to="/contagens" className="btn">Voltar para contagens</Link>
       </div>
     )
@@ -496,7 +496,7 @@ export default function CountDetail() {
             <span className="text-muted">{showNotCounted ? '▾' : '▸'}</span>
           </button>
           {showNotCounted && (
-            <ul className="mt-3 max-h-56 overflow-auto divide-y divide-zinc-100 dark:divide-zinc-800 rounded-lg border border-zinc-100 dark:border-zinc-800">
+            <ul className="mt-3 max-h-56 overflow-auto divide-y divide-zinc-100 rounded-lg border border-zinc-100">
               {stats.naoContados.slice(0, 200).map(p => (
                 <li key={p.codigo} className="flex items-center justify-between py-2.5 px-3 text-sm">
                   <span className="font-mono">{p.codigo}</span>
@@ -530,7 +530,7 @@ export default function CountDetail() {
             autoCapitalize="off" autoCorrect="off" spellCheck={false}
           />
         )}
-        <ul className="max-h-[22rem] overflow-auto divide-y divide-zinc-100 dark:divide-zinc-800 rounded-lg border border-zinc-100 dark:border-zinc-800">
+        <ul className="max-h-[22rem] overflow-auto divide-y divide-zinc-100 rounded-lg border border-zinc-100">
           {filteredEntries.map(entry => {
             const nome = planNameMap.get(entry.codigo) || catalogNames.get(entry.codigo) || null
             return (
@@ -541,7 +541,7 @@ export default function CountDetail() {
                   {nome || <span className="font-mono font-semibold">{entry.codigo}</span>}
                 </div>
                 {nome && (
-                  <div className="text-xs font-mono text-zinc-400 dark:text-zinc-500 truncate">{entry.codigo}</div>
+                  <div className="text-xs font-mono text-zinc-400 truncate">{entry.codigo}</div>
                 )}
                 <div className="text-xs text-muted mt-0.5">
                   {entry.qty} un
@@ -573,7 +573,7 @@ export default function CountDetail() {
 
       {/* Barra fixa de ação (no alcance do polegar) */}
       {isEditable && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 dark:border-zinc-800 bg-paper/95 backdrop-blur px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-paper/95 backdrop-blur px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-2xl">
             <ManualEntry onAdd={onAdd} onScan={() => setShowScanner(true)} />
           </div>
@@ -592,26 +592,26 @@ export default function CountDetail() {
 
       {/* Modal: código desconhecido */}
       {pendingUnknown && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4 bg-black/60">
           <div className="card w-full max-w-sm space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
             <div>
-              <div className="text-sm font-semibold text-red-600 dark:text-red-400 mb-1">Código não encontrado</div>
+              <div className="text-sm font-semibold text-red-600 mb-1">Código não encontrado</div>
               <div className="text-2xl font-mono font-bold tracking-wider">{pendingUnknown.codigo}</div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
+              <p className="text-sm text-zinc-500 mt-2">
                 Este código não está na planilha nem no catálogo de produtos.<br />
                 Verifique se foi lido ou digitado corretamente.
               </p>
             </div>
 
             {pendingUnknown.suggestion && (
-              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-2">
-                <div className="text-xs font-semibold text-amber-700 dark:text-amber-400">Você quis dizer?</div>
-                <div className="font-mono font-bold text-zinc-900 dark:text-white">{pendingUnknown.suggestion}</div>
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-2">
+                <div className="text-xs font-semibold text-amber-700">Você quis dizer?</div>
+                <div className="font-mono font-bold text-zinc-900">{pendingUnknown.suggestion}</div>
                 {pendingUnknown.suggestionNome && (
-                  <div className="text-sm text-zinc-600 dark:text-zinc-400">{pendingUnknown.suggestionNome}</div>
+                  <div className="text-sm text-zinc-600">{pendingUnknown.suggestionNome}</div>
                 )}
                 <button
-                  className="text-xs text-amber-700 dark:text-amber-400 underline underline-offset-2"
+                  className="text-xs text-amber-700 underline underline-offset-2"
                   onClick={() => {
                     const s = pendingUnknown.suggestion!
                     const q = pendingUnknown.qty
@@ -687,7 +687,7 @@ function StatusDot({ status }: { status: ItemStatus }) {
     regular: { c: 'bg-green-500', t: 'Certo' },
     falta: { c: 'bg-red-500', t: 'Falta' },
     excesso: { c: 'bg-amber-500', t: 'Sobra' },
-    nao_contado: { c: 'bg-zinc-300 dark:bg-zinc-600', t: 'Não contado' }
+    nao_contado: { c: 'bg-zinc-300', t: 'Não contado' }
   }
   return <span className={`h-2 w-2 flex-shrink-0 rounded-full ${map[status].c}`} role="img" aria-label={map[status].t} title={map[status].t} />
 }
@@ -711,12 +711,12 @@ function SyncStatus({ countId }: { countId: string }) {
   }, [countId])
 
   if (!online) {
-    return <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"><span className="h-2 w-2 rounded-full bg-amber-500" />Offline — salvando no aparelho</span>
+    return <span className="inline-flex items-center gap-1.5 text-xs text-amber-600"><span className="h-2 w-2 rounded-full bg-amber-500" />Offline — salvando no aparelho</span>
   }
   if (pending > 0) {
     return <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500"><span className="h-2 w-2 animate-pulse rounded-full bg-zinc-400" />Enviando {pending}…</span>
   }
-  return <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tudo salvo</span>
+  return <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tudo salvo</span>
 }
 
 function levenshtein(a: string, b: string): number {

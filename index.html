@@ -2,27 +2,32 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    
-    <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#7C3AED" />
-    <meta name="description" content="Sistema inteligente de contagem de estoque e auditoria em tempo real" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Audite — contagem de estoque para lojas de moda</title>
+    <meta name="description" content="Bipe as peças com o celular. O Audite compara com o seu sistema e mostra o que falta e o que sobra. Teste grátis por 7 dias." />
+    <meta name="theme-color" content="#FAFAF8" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Audite — contagem de estoque para lojas de moda" />
+    <meta property="og:description" content="Bipe as peças com o celular e veja o que falta e o que sobra na sua loja." />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:image" content="/icon-512.png" />
+
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Audite.AI" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    
-    <!-- Icons -->
+    <meta name="apple-mobile-web-app-title" content="Audite" />
+
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
     <link rel="manifest" href="/manifest.json" />
-    
-    <title>AUDITE.AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600&display=swap" />
   </head>
-  <body class="bg-white dark:bg-zinc-950">
+  <body>
     <div id="root"></div>
+    <noscript>O Audite precisa de JavaScript ativado para funcionar.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,3 +1,4 @@
+import { Flashlight } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
 
@@ -145,7 +146,7 @@ export default function BarcodeScanner({ onDetected, onClose, planCodes }: Props
               <span className="absolute -right-0.5 -top-0.5 h-8 w-8 border-r-4 border-t-4 border-white/90 rounded-tr-lg" />
               <span className="absolute -bottom-0.5 -left-0.5 h-8 w-8 border-b-4 border-l-4 border-white/90 rounded-bl-lg" />
               <span className="absolute -bottom-0.5 -right-0.5 h-8 w-8 border-b-4 border-r-4 border-white/90 rounded-br-lg" />
-              <span className="absolute left-2 right-2 top-1/2 h-px -translate-y-1/2 bg-primary-500/80 shadow-[0_0_12px_2px_rgba(255,107,53,0.7)]" />
+              <span className="absolute left-2 right-2 top-1/2 h-px -translate-y-1/2 bg-red-500/90 shadow-[0_0_10px_1px_rgba(239,68,68,0.6)]" />
             </div>
           </div>
         )}
@@ -153,8 +154,7 @@ export default function BarcodeScanner({ onDetected, onClose, planCodes }: Props
         {supported === false && (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
             <div className="text-white/90">
-              <div className="text-4xl mb-3">📷</div>
-              <p className="font-semibold mb-1">Câmera indisponível</p>
+                            <p className="font-semibold mb-1">Câmera indisponível</p>
               <p className="text-sm text-white/70">Use o campo de digitação para inserir os códigos.</p>
             </div>
           </div>
@@ -162,8 +162,7 @@ export default function BarcodeScanner({ onDetected, onClose, planCodes }: Props
         {error && (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
             <div className="text-white/90">
-              <div className="text-4xl mb-3">🚫</div>
-              <p className="font-semibold mb-1">{error}</p>
+                            <p className="font-semibold mb-1">{error}</p>
               <p className="text-sm text-white/70">Verifique as permissões e tente novamente.</p>
             </div>
           </div>
@@ -176,7 +175,7 @@ export default function BarcodeScanner({ onDetected, onClose, planCodes }: Props
             }`}>
               {lastHit.code}
               <div className="font-sans text-xs font-normal mt-0.5 opacity-80">
-                {lastHit.known ? '✓ na planilha — registrado' : '⚠ fora da planilha — registrado como excesso'}
+                {lastHit.known ? 'Na planilha' : 'Fora da planilha'}
               </div>
             </div>
           </div>
@@ -191,8 +190,8 @@ export default function BarcodeScanner({ onDetected, onClose, planCodes }: Props
           {supported && !error ? (engine === 'zxing' ? 'Aponte para o código' : 'Aponte para o código de barras') : ''}
         </p>
         {torchAvailable && (
-          <button onClick={toggleTorch} aria-label="Lanterna" className={`rounded-xl px-4 py-3 text-base active:scale-95 transition ${torchOn ? 'bg-primary-500 text-white' : 'bg-white/15 text-white'}`}>
-            🔦
+          <button onClick={toggleTorch} aria-label={torchOn ? "Desligar lanterna" : "Ligar lanterna"} aria-pressed={torchOn} className={`rounded-xl px-4 py-3 text-base active:scale-95 transition ${torchOn ? 'bg-white text-zinc-900' : 'bg-white/15 text-white'}`}>
+            <Flashlight className="h-5 w-5" aria-hidden="true" />
           </button>
         )}
       </div>

@@ -72,7 +72,6 @@ export default function Report() {
   }, [rows])
 
   const units = (list: Result[]) => list.reduce((a, r) => a + Math.abs((r.manual_qtd || 0) - (r.saldo_qtd || 0)), 0)
-  const pendentes = [...groups.falta, ...groups.excesso].filter((r) => !justifications.has(r.codigo)).length
 
   function reportData(): ReportData {
     return {
@@ -140,6 +139,7 @@ export default function Report() {
 
   const list = groups[tab]
   const current = TABS.find((t) => t.key === tab)!
+  const pendentes = tab === 'regular' ? 0 : list.filter((r) => !justifications.has(r.codigo)).length
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -190,9 +190,9 @@ export default function Report() {
           ))}
         </div>
 
-        {tab !== 'regular' && pendentes > 0 && list.length > 0 && (
+        {pendentes > 0 && (
           <p className="mt-4 text-sm text-zinc-500">
-            {pendentes} {pendentes === 1 ? 'divergência sem motivo anotado' : 'divergências sem motivo anotado'}. Anotar é opcional e sai no PDF e no Excel.
+            {pendentes} {pendentes === 1 ? 'divergência sem motivo anotado' : 'divergências sem motivo anotado'}. Anotar é opcional; o motivo sai no PDF e no Excel.
           </p>
         )}
 

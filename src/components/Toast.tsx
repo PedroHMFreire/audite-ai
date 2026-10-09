@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { createContext, useContext, useCallback, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 
 // Tipos
 export type ToastType = 'success' | 'warning' | 'error' | 'info'
@@ -69,90 +68,46 @@ export function useToast() {
   return context
 }
 
-// Componente do Toast Individual
+const DOT: Record<ToastType, string> = {
+  success: 'bg-green-500',
+  warning: 'bg-amber-500',
+  error: 'bg-red-500',
+  info: 'bg-zinc-400',
+}
+
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
-  const [isVisible, setIsVisible] = useState(false)
-  const [isLeaving, setIsLeaving] = useState(false)
-
-  useEffect(() => {
-    // Animação de entrada
-    const timer = setTimeout(() => setIsVisible(true), 10)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const handleRemove = useCallback(() => {
-    setIsLeaving(true)
-    setTimeout(() => onRemove(toast.id), 300) // Aguarda animação
-  }, [toast.id, onRemove])
-
-  // Ícones por tipo
-  const getIcon = () => {
-    switch (toast.type) {
-      case 'success': return '✅'
-      case 'warning': return '⚠️'
-      case 'error': return '❌'
-      case 'info': return 'ℹ️'
-      default: return '📢'
-    }
-  }
-
-  // Classes CSS por tipo
-  const getTypeClasses = () => {
-    switch (toast.type) {
-      case 'success': 
-        return 'bg-green-500 border-green-400 text-white'
-      case 'warning': 
-        return 'bg-yellow-500 border-yellow-400 text-white'
-      case 'error': 
-        return 'bg-red-500 border-red-400 text-white'
-      case 'info': 
-        return 'bg-blue-500 border-blue-400 text-white'
-      default: 
-        return 'bg-zinc-800 border-zinc-700 text-white'
-    }
-  }
-
   return (
     <div
-      className={`
-        transform transition-all duration-300 ease-in-out
-        ${isVisible && !isLeaving ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
-        ${getTypeClasses()}
-        rounded-lg border shadow-lg p-3 cursor-pointer
-        hover:scale-105 active:scale-95
-        max-w-sm w-full
-      `}
-      onClick={handleRemove}
+      role={toast.type === 'error' ? 'alert' : 'status'}
+      className="pointer-events-auto flex w-full items-start gap-3 rounded-xl bg-ink px-4 py-3 text-white shadow-lg animate-fade-in"
     >
-      <div className="flex items-start gap-3">
-        <span className="text-lg flex-shrink-0 mt-0.5">{getIcon()}</span>
-        <div className="min-w-0 flex-1">
-          <div className="font-medium text-sm">{toast.message}</div>
-          {toast.description && (
-            <div className="text-xs opacity-90 mt-1">{toast.description}</div>
-          )}
-        </div>
-        <button 
-          className="text-xs opacity-60 hover:opacity-100 ml-2 flex-shrink-0"
-          onClick={(e) => {
-            e.stopPropagation()
-            handleRemove()
-          }}
-        >
-          ✕
-        </button>
+      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${DOT[toast.type]}`} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{toast.message}</p>
+        {toast.description && <p className="mt-0.5 break-words text-xs text-zinc-300">{toast.description}</p>}
       </div>
+      <button
+        type="button"
+        aria-label="Fechar aviso"
+        className="-mr-1 shrink-0 rounded p-1 text-zinc-400 hover:text-white"
+        onClick={() => onRemove(toast.id)}
+      >
+        ✕
+      </button>
     </div>
   )
 }
 
-// Container dos Toasts
+// No topo: no celular o rodapé é ocupado pela navegação e pela barra de bipar.
 function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: string) => void }) {
   if (toasts.length === 0) return null
-
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-auto w-full max-w-sm px-4">
-      {toasts.map(toast => (
+    <div
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[90] mx-auto flex w-full max-w-sm flex-col gap-2 px-4"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+    >
+      {toasts.slice(-3).map((toast) => (
         <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
       ))}
     </div>

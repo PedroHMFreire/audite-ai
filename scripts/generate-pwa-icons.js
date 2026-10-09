@@ -1,48 +1,34 @@
-import sharp from 'sharp';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+// Gera os ícones do aplicativo a partir da marca. Uso: npm run pwa:icons
+import sharp from 'sharp'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../public')
 
-async function generateIcons() {
-  const logoPath = path.join(__dirname, '../public/logo.svg');
-  const publicDir = path.join(__dirname, '../public');
-  
-  if (!fs.existsSync(logoPath)) {
-    console.error(`❌ Erro: Arquivo não encontrado: ${logoPath}`);
-    process.exit(1);
-  }
+const INK = '#161614'
+const PAPER = '#FAFAF8'
 
-  const sizes = [
-    { width: 192, height: 192, name: 'icon-192.png' },
-    { width: 192, height: 192, name: 'icon-192-maskable.png' },
-    { width: 512, height: 512, name: 'icon-512.png' },
-    { width: 512, height: 512, name: 'icon-512-maskable.png' },
-    { width: 180, height: 180, name: 'icon-180.png' }
-  ];
+// `radius` arredonda o fundo; `scale` encolhe o símbolo. Ícones "maskable" são
+// recortados pelo sistema (círculo, squircle…), então o fundo vai até a borda
+// e o símbolo fica dentro da zona segura central.
+const icon = ({ radius, scale }) => `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="${radius}" fill="${INK}"/>
+  <g transform="translate(256 256) scale(${scale}) translate(-256 -256)">
+    <path d="M148 268l72 72 144-150" fill="none" stroke="${PAPER}" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>`
 
-  console.log('🎨 Gerando ícones PWA...\n');
+const files = [
+  { name: 'icon-192.png', size: 192, radius: 116, scale: 1 },
+  { name: 'icon-512.png', size: 512, radius: 116, scale: 1 },
+  { name: 'icon-192-maskable.png', size: 192, radius: 0, scale: 0.72 },
+  { name: 'icon-512-maskable.png', size: 512, radius: 0, scale: 0.72 },
+  // iOS aplica o próprio arredondamento e não aceita transparência.
+  { name: 'icon-180.png', size: 180, radius: 0, scale: 0.86 },
+]
 
-  for (const size of sizes) {
-    try {
-      const outputPath = path.join(publicDir, size.name);
-      
-      await sharp(logoPath)
-        .resize(size.width, size.height, {
-          fit: 'contain',
-          background: { r: 255, g: 255, b: 255, alpha: 1 }
-        })
-        .png()
-        .toFile(outputPath);
-      
-      console.log(`✅ ${size.name} (${size.width}x${size.height})`);
-    } catch (error) {
-      console.error(`❌ Erro ao gerar ${size.name}:`, error.message);
-    }
-  }
-
-  console.log('\n✨ Ícones gerados com sucesso!');
+for (const f of files) {
+  await sharp(Buffer.from(icon(f))).resize(f.size, f.size).png().toFile(path.join(publicDir, f.name))
+  console.log(`${f.name} (${f.size}x${f.size})`)
 }
-
-generateIcons().catch(console.error);

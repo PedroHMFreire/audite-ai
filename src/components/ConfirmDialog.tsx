@@ -51,11 +51,11 @@ export default function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-xl p-5 animate-scale-in"
+        className="w-full max-w-sm rounded-2xl bg-white border border-zinc-100 shadow-xl p-5 animate-scale-in"
         onClick={e => e.stopPropagation()}
       >
-        <h4 className="text-base font-semibold text-zinc-900 dark:text-white">{title}</h4>
-        {description && <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">{description}</p>}
+        <h4 className="text-base font-semibold text-zinc-900">{title}</h4>
+        {description && <p className="mt-1.5 text-sm text-zinc-500">{description}</p>}
         <div className="mt-5 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <button
             onClick={onCancel}

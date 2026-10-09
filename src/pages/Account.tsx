@@ -95,7 +95,9 @@ export default function Account() {
 
   async function logout() {
     await signOut()
-    nav('/login', { replace: true })
+    // Recarrega em vez de navegar: zera tudo o que estava em memória do usuário
+    // anterior (importante em aparelho compartilhado no balcão da loja).
+    window.location.assign('/login')
   }
 
   const status = describeAccess(access)

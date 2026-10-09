@@ -33,3 +33,7 @@ pnpm-debug.log*
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Build usado só pelos testes ponta a ponta
+dist-e2e/
+tests/.shots/
