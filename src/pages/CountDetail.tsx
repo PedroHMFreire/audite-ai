@@ -19,7 +19,7 @@ import {
   type Count
 } from '@/lib/db'
 import { feedbackSuccess, feedbackWarning, feedbackNeutral, feedbackError } from '@/lib/feedback'
-import { onPendingChange, flushQueue, pendingCountFor } from '@/lib/offlineQueue'
+import { onEntryRejected, onPendingChange, flushQueue, pendingCountFor } from '@/lib/offlineQueue'
 import { InputValidator } from '@/lib/security'
 import { getMyOrg, lookupProduct, batchLookupProducts } from '@/lib/catalog'
 
@@ -165,6 +165,16 @@ export default function CountDetail() {
     }, 1200)
   }, [id])
 
+  // Leituras guardadas sem internet que o servidor recusou ao reenviar.
+  useEffect(() => {
+    return onEntryRejected(({ entry, reason }) => {
+      if (entry.count_id !== id) return
+      feedbackError()
+      addToast({ type: 'error', message: `Leitura não enviada: ${entry.codigo}`, description: reason, duration: 9000 })
+      scheduleReconcile()
+    })
+  }, [id, addToast, scheduleReconcile])
+
   const onParsed = useCallback(async (items: PlanRow[]) => {
     if (!id || !isEditable) return
     try {
@@ -211,7 +221,8 @@ export default function CountDetail() {
     } catch (err) {
       feedbackError()
       const message = accessErrorMessage(err) || (err instanceof Error ? err.message : 'Erro ao adicionar')
-      addToast({ type: 'error', message: 'Não foi possível adicionar', description: message })
+      addToast({ type: 'error', message: 'Não foi possível adicionar', description: message, duration: 7000 })
+      scheduleReconcile() // desfaz a soma otimista: volta ao que o servidor tem
     }
   }, [id, addToast, scheduleReconcile])
 

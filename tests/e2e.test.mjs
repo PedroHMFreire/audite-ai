@@ -167,6 +167,28 @@ test('contagem: desfazer e remover item', async () => {
   await page.getByText('Itens contados (3)').waitFor()
 })
 
+test('sem internet: continua bipando, guarda no aparelho e envia ao reconectar', async () => {
+  const countId = page.url().split('/').pop()
+  await page.waitForTimeout(1500)
+  await ctx.setOffline(true)
+  await page.getByText('Offline — salvando no aparelho').waitFor()
+  await addCode('OFF-1', 2)
+  await addCode('OFF-1', 1)
+  await page.getByText('Itens contados (4)').waitFor()
+  const before = await admin.from('manual_entries').select('qty').eq('count_id', countId).eq('codigo', 'OFF-1')
+  assert.equal(before.data.length, 0, 'offline: nada chegou ao servidor ainda')
+
+  await ctx.setOffline(false)
+  await page.getByText('Tudo salvo').waitFor({ timeout: 20000 })
+  const afterSync = await admin.from('manual_entries').select('qty').eq('count_id', countId).eq('codigo', 'OFF-1').single()
+  assert.equal(afterSync.data.qty, 3, 'as duas leituras offline chegam uma vez cada')
+
+  await page.waitForTimeout(1800)
+  await page.getByRole('button', { name: 'Remover OFF-1' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click()
+  await page.getByText('Itens contados (3)').waitFor()
+})
+
 test('os dados sobrevivem a recarregar a página', async () => {
   await page.waitForTimeout(1800) // reconciliação com o servidor
   await page.reload({ waitUntil: 'networkidle' })

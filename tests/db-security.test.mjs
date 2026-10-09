@@ -154,6 +154,29 @@ test('funções administrativas negam acesso a usuário comum', async () => {
   assert.ok((await a.client.rpc('admin_list_users_with_roles')).error)
 })
 
+test('leitura com identificador: reenviar não soma duas vezes', async () => {
+  const send = (entry, qty = 1) => a.client.rpc('add_manual_entry', { p_count_id: countA.id, p_codigo: 'IDEM-1', p_qty: qty, p_entry_id: entry })
+  const first = await send('entrada-0001', 2)
+  assert.ifError(first.error)
+  assert.equal(first.data, true)
+  const again = await send('entrada-0001', 2)
+  assert.ifError(again.error)
+  assert.equal(again.data, false, 'reenvio deve ser reconhecido')
+  assert.equal((await send('entrada-0002', 3)).data, true)
+  const { data } = await a.client.from('manual_entries').select('qty').eq('count_id', countA.id).eq('codigo', 'IDEM-1').single()
+  assert.equal(data.qty, 5)
+  await a.client.from('manual_entries').delete().eq('count_id', countA.id).eq('codigo', 'IDEM-1')
+})
+
+test('leitura com identificador: outro cliente e código inválido são recusados', async () => {
+  const other = await b.client.rpc('add_manual_entry', { p_count_id: countA.id, p_codigo: 'X', p_qty: 1, p_entry_id: 'entrada-b-0001' })
+  assert.match(other.error?.message || '', /contagem_nao_encontrada/)
+  const empty = await a.client.rpc('add_manual_entry', { p_count_id: countA.id, p_codigo: '   ', p_qty: 1, p_entry_id: 'entrada-0003' })
+  assert.match(empty.error?.message || '', /codigo_invalido/)
+  const receipts = await a.client.from('manual_entry_receipts').select('*')
+  assert.ok(receipts.error || receipts.data.length === 0, 'recibos não são legíveis pelo cliente')
+})
+
 test('trial vencido: lê tudo, mas não cria nem altera contagens', async () => {
   await admin.from('subscriptions').update({ trial_ends_at: new Date(Date.now() - 3600e3).toISOString() }).eq('user_id', a.id)
   const access = await a.client.rpc('my_access')
@@ -168,6 +191,8 @@ test('trial vencido: lê tudo, mas não cria nem altera contagens', async () => 
 
   assert.ok((await a.client.from('counts').insert({ user_id: a.id, nome: 'nova' })).error)
   assert.ok((await a.client.rpc('add_manual_entry', { p_count_id: countA.id, p_codigo: '123', p_qty: 1 })).error)
+  const withId = await a.client.rpc('add_manual_entry', { p_count_id: countA.id, p_codigo: '123', p_qty: 1, p_entry_id: 'entrada-vencida-1' })
+  assert.match(withId.error?.message || '', /assinatura_inativa/)
   assert.ok((await a.client.from('plan_items').insert({ count_id: countA.id, codigo: '9', nome: 'x', saldo: 1 })).error)
   const fin = await a.client.rpc('compute_count_results', { p_count_id: countA.id })
   assert.match(fin.error?.message || '', /assinatura_inativa/)
@@ -182,6 +207,8 @@ test('assinatura ativa libera de novo e a contagem é finalizada corretamente', 
   assert.ifError(fin.error)
   // plano: 3 unidades do código 123; contado: 2 → uma falta
   assert.deepEqual(fin.data[0], { regular: 0, falta: 1, excesso: 0, total: 1 })
+  const closed = await a.client.rpc('add_manual_entry', { p_count_id: countA.id, p_codigo: '123', p_qty: 1, p_entry_id: 'entrada-fechada-1' })
+  assert.match(closed.error?.message || '', /contagem_fechada/)
 })
 
 test('cancelada continua valendo até o fim do período pago', async () => {

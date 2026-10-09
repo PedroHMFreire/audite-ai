@@ -5,9 +5,14 @@
  * persistidas em IndexedDB e sincronizadas com o Supabase assim que houver
  * rede — o vendedor nunca perde uma contagem por queda de conexão.
  *
- * Cada item pendente representa uma chamada à RPC `add_manual_entry`
- * (upsert incremental: soma `qty` por código), então reenviar é idempotente
- * em relação à intenção (cada bipe = +qty uma única vez).
+ * Cada item pendente representa uma chamada à RPC `add_manual_entry`, que
+ * soma `qty` ao código. O `id` da leitura vai junto: o servidor guarda os ids
+ * já recebidos e ignora repetições, então reenviar depois de uma resposta
+ * perdida não conta a peça duas vezes.
+ *
+ * Falha de rede → a leitura fica na fila. Recusa do servidor (contagem
+ * fechada, acesso inativo) → a leitura é descartada e o usuário é avisado;
+ * mantê-la travaria todas as seguintes para sempre.
  */
 import { supabase } from './supabaseClient'
 
@@ -17,6 +22,8 @@ export type PendingEntry = {
   codigo: string
   qty: number
   ts: number
+  /** Dono da leitura: outra conta no mesmo aparelho não a envia. */
+  user_id?: string
 }
 
 const DB_NAME = 'audite-offline'
@@ -77,23 +84,55 @@ async function remove(id: string): Promise<void> {
 type Listener = (pending: number) => void
 const listeners = new Set<Listener>()
 
+async function currentUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession()
+  return data.session?.user.id ?? null
+}
+
+/** Pendências da conta que está logada agora. */
+async function mine(): Promise<PendingEntry[]> {
+  const [all, uid] = await Promise.all([getAll(), currentUserId()])
+  return all.filter((e) => !e.user_id || e.user_id === uid)
+}
+
 async function notify() {
-  const all = await getAll()
+  const all = await mine()
   listeners.forEach(l => l(all.length))
+}
+
+// ---- Leituras recusadas pelo servidor ----
+export type RejectedEntry = { entry: PendingEntry; reason: string }
+type RejectListener = (rejected: RejectedEntry) => void
+const rejectListeners = new Set<RejectListener>()
+
+/** Avisa quando uma leitura guardada foi recusada pelo servidor e descartada. */
+export function onEntryRejected(listener: RejectListener): () => void {
+  rejectListeners.add(listener)
+  return () => rejectListeners.delete(listener)
+}
+
+export class EntryRejectedError extends Error {}
+
+function rejectionMessage(raw: string): string {
+  if (/assinatura_inativa/.test(raw)) return 'Seu acesso está inativo. Assine para continuar contando.'
+  if (/contagem_fechada/.test(raw)) return 'Esta contagem já foi finalizada. Reabra pelo relatório para incluir itens.'
+  if (/contagem_nao_encontrada/.test(raw)) return 'Esta contagem não existe mais ou pertence a outra conta.'
+  if (/codigo_invalido/.test(raw)) return 'Código vazio ou longo demais.'
+  return raw || 'O servidor recusou a leitura.'
 }
 
 export function onPendingChange(listener: Listener): () => void {
   listeners.add(listener)
-  void getAll().then(all => listener(all.length))
+  void mine().then(all => listener(all.length))
   return () => listeners.delete(listener)
 }
 
 export async function pendingCount(): Promise<number> {
-  return (await getAll()).length
+  return (await mine()).length
 }
 
 export async function pendingCountFor(count_id: string): Promise<number> {
-  return (await getAll()).filter(e => e.count_id === count_id).length
+  return (await mine()).filter(e => e.count_id === count_id).length
 }
 
 function uid(): string {
@@ -101,22 +140,30 @@ function uid(): string {
   return `${Date.now().toString(36)}-${(performance.now() | 0).toString(36)}-${(globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2))}`
 }
 
-/** Envia uma entrada à RPC; em caso de falha, devolve false. */
-async function sendOne(entry: PendingEntry): Promise<boolean> {
+type SendResult = { outcome: 'ok' } | { outcome: 'retry' } | { outcome: 'rejected'; reason: string }
+
+/**
+ * Envia uma leitura. Distingue "tente de novo" (sem rede, servidor fora do
+ * ar, sessão expirada) de "o servidor recusou" (não adianta reenviar).
+ */
+async function sendOne(entry: PendingEntry): Promise<SendResult> {
   try {
-    const { error } = await supabase.rpc('add_manual_entry', {
+    const { error, status } = await supabase.rpc('add_manual_entry', {
       p_count_id: entry.count_id,
       p_codigo: entry.codigo,
-      p_qty: entry.qty
+      p_qty: entry.qty,
+      p_entry_id: entry.id
     })
-    return !error
+    if (!error) return { outcome: 'ok' }
+    // status 0 = a requisição nem saiu; 401 = sessão a renovar; 408/429/5xx = temporário
+    if (!status || status === 401 || status === 408 || status === 429 || status >= 500) return { outcome: 'retry' }
+    return { outcome: 'rejected', reason: rejectionMessage(error.message) }
   } catch {
-    return false
+    return { outcome: 'retry' }
   }
 }
 
 let activeFlush: Promise<void> | null = null
-
 /** Tenta drenar a fila. Se um flush já estiver em progresso, aguarda sua conclusão. */
 export async function flushQueue(): Promise<void> {
   if (activeFlush) {
@@ -127,11 +174,14 @@ export async function flushQueue(): Promise<void> {
   }
   activeFlush = (async () => {
     try {
-      const all = await getAll()
+      const all = (await mine()).sort((a, b) => a.ts - b.ts)
       for (const entry of all) {
-        const ok = await sendOne(entry)
-        if (!ok) break
+        const result = await sendOne(entry)
+        if (result.outcome === 'retry') break
         await remove(entry.id)
+        if (result.outcome === 'rejected') {
+          rejectListeners.forEach((l) => l({ entry, reason: result.reason }))
+        }
         await notify()
       }
     } finally {
@@ -142,18 +192,18 @@ export async function flushQueue(): Promise<void> {
 }
 
 /**
- * Registra uma entrada. Tenta enviar na hora; se estiver offline ou falhar,
- * guarda na fila e sincroniza depois. Nunca lança por falta de rede.
+ * Registra uma leitura. Tenta enviar na hora; sem rede, guarda na fila e
+ * sincroniza depois. Lança `EntryRejectedError` se o servidor recusar.
  */
 export async function enqueueEntry(count_id: string, codigo: string, qty: number): Promise<void> {
-  const entry: PendingEntry = { id: uid(), count_id, codigo, qty, ts: Date.now() }
-
+  const entry: PendingEntry = { id: uid(), count_id, codigo, qty, ts: Date.now(), user_id: (await currentUserId()) ?? undefined }
   const online = typeof navigator === 'undefined' || navigator.onLine
   if (online) {
-    const ok = await sendOne(entry)
-    if (ok) return
+    const result = await sendOne(entry)
+    if (result.outcome === 'ok') return
+    if (result.outcome === 'rejected') throw new EntryRejectedError(result.reason)
   }
-  // offline ou falhou → persiste e sincroniza quando voltar
+  // sem rede ou falha temporária → persiste e sincroniza quando voltar
   await put(entry)
   await notify()
 }
