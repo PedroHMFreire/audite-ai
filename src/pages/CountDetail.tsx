@@ -26,9 +26,13 @@ import { getMyOrg, lookupProduct, batchLookupProducts } from '@/lib/catalog'
 // Carregado sob demanda: a lib de leitura (ZXing) só baixa ao abrir o scanner.
 const BarcodeScanner = lazy(() => import('@/components/BarcodeScanner'))
 
+// Quantas leituras a tela de bipe mostra; as mais antigas ficam só no total.
+const SCAN_LOG_LIMIT = 100
+
 type PlanRow = { codigo: string; nome: string; saldo: number }
 type Entry = { id: string; codigo: string; qty: number; pending?: boolean }
 type ItemStatus = 'regular' | 'falta' | 'excesso' | 'nao_contado'
+type UnknownCode = { codigo: string; qty: number; suggestion: string | null; suggestionNome: string | null }
 
 export default function CountDetail() {
   const { id } = useParams()
@@ -38,11 +42,18 @@ export default function CountDetail() {
   const [storeName, setStoreName] = useState<string | null>(null)
   const [plan, setPlan] = useState<PlanRow[]>([])
   const [entries, setEntries] = useState<Entry[]>([])
+  const entriesRef = useRef(entries)
+  entriesRef.current = entries
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
+  // Sessão de bipe pela câmera: o que foi lido desde que o leitor abriu.
+  const scanningRef = useRef(false)
+  const scanSeq = useRef(0)
+  const [scanLog, setScanLog] = useState<{ key: number; codigo: string }[]>([])
+  const [scanCount, setScanCount] = useState(0)
   const [search, setSearch] = useState('')
   const [showNotCounted, setShowNotCounted] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<Entry | null>(null)
@@ -52,12 +63,11 @@ export default function CountDetail() {
   const hasOrg = useRef<boolean>(false)
   const catalogCache = useRef<Map<string, string | null>>(new Map())
   const [catalogNames, setCatalogNames] = useState<Map<string, string | null>>(new Map())
-  const [pendingUnknown, setPendingUnknown] = useState<{
-    codigo: string
-    qty: number
-    suggestion: string | null
-    suggestionNome: string | null
-  } | null>(null)
+  // Fila, não um só: no bipe em sequência um segundo código desconhecido pode
+  // chegar antes de o primeiro ser respondido, e nenhum pode se perder.
+  const [unknownQueue, setUnknownQueue] = useState<UnknownCode[]>([])
+  const pendingUnknown = unknownQueue[0] ?? null
+  const dismissUnknown = useCallback(() => setUnknownQueue(q => q.slice(1)), [])
 
   const canWrite = useCanWrite()
   const isOpen = count?.status !== 'finalizada' && count?.status !== 'arquivada'
@@ -204,6 +214,12 @@ export default function CountDetail() {
     })
     lastAddRef.current = { codigo, qty }
     setLastAdd(true)
+    const scanning = scanningRef.current
+    if (scanning) {
+      const key = ++scanSeq.current
+      setScanLog(prev => [{ key, codigo }, ...prev].slice(0, SCAN_LOG_LIMIT))
+      setScanCount(n => n + 1)
+    }
     if (inPlan) feedbackSuccess()
     else feedbackWarning()
 
@@ -216,7 +232,8 @@ export default function CountDetail() {
         : catalogNome
           ? `${codigo} · fora da planilha desta contagem`
           : 'Código fora da planilha, registrado como sobra'
-      addToast({ type: toastType, message: toastMsg, description: toastDesc, duration: 2200 })
+      // No bipe em sequência a própria lista do leitor confirma; aviso cobriria a câmera.
+      if (!scanning) addToast({ type: toastType, message: toastMsg, description: toastDesc, duration: 2200 })
       scheduleReconcile()
     } catch (err) {
       feedbackError()
@@ -248,12 +265,12 @@ export default function CountDetail() {
         // Código desconhecido: pedir confirmação antes de registrar
         feedbackWarning()
         const suggestion = findSimilarCode(codigo, Array.from(planCodes))
-        setPendingUnknown({
+        setUnknownQueue(q => [...q, {
           codigo,
           qty,
           suggestion,
           suggestionNome: suggestion ? (planNameMap.get(suggestion) || null) : null
-        })
+        }])
         return
       }
 
@@ -263,14 +280,14 @@ export default function CountDetail() {
     }
 
     await doAdd(codigo, qty, inPlan, undefined)
-  }, [id, isEditable, planCodes, addToast, doAdd, planNameMap])
+  }, [id, isEditable, planCodes, addToast, doAdd, planNameMap, resolveCode])
 
   const confirmUnknownCode = useCallback(async () => {
     if (!pendingUnknown) return
     const { codigo, qty } = pendingUnknown
-    setPendingUnknown(null)
+    dismissUnknown()
     await doAdd(codigo, qty, false, null)
-  }, [pendingUnknown, doAdd])
+  }, [pendingUnknown, dismissUnknown, doAdd])
 
   const undoLast = useCallback(async () => {
     const last = lastAddRef.current
@@ -278,12 +295,14 @@ export default function CountDetail() {
     lastAddRef.current = null
     setLastAdd(false)
     const codigo = last.codigo
-    let resultTotal = 0
+    // Calculado fora do setEntries: o React pode adiar a função de atualização,
+    // e um total ainda zerado apagaria o código inteiro no servidor.
+    const current = entriesRef.current.find(e => e.codigo === codigo)?.qty ?? 0
+    const resultTotal = Math.max(0, current - last.qty)
     setEntries(prev => {
       const idx = prev.findIndex(e => e.codigo === codigo)
       if (idx < 0) return prev
       const remaining = prev[idx].qty - last.qty
-      resultTotal = remaining
       if (remaining <= 0) return prev.filter((_, i) => i !== idx)
       const next = [...prev]
       next[idx] = { ...next[idx], qty: remaining, pending: true }
@@ -315,6 +334,26 @@ export default function CountDetail() {
       addToast({ type: 'error', message: 'Não foi possível remover', description: message })
     }
   }, [removeTarget, id, addToast, scheduleReconcile])
+
+  const openScanner = useCallback(() => {
+    setScanLog([])
+    setScanCount(0)
+    scanningRef.current = true
+    setShowScanner(true)
+  }, [])
+
+  const closeScanner = useCallback(() => {
+    scanningRef.current = false
+    setShowScanner(false)
+  }, [])
+
+  const onScanned = useCallback((code: string) => { void onAdd(code, 1) }, [onAdd])
+
+  const undoLastScan = useCallback(() => {
+    setScanLog(prev => prev.slice(1))
+    setScanCount(n => Math.max(0, n - 1))
+    void undoLast()
+  }, [undoLast])
 
   // ----- Métricas -----
   const countedByCode = useMemo(() => {
@@ -404,6 +443,13 @@ export default function CountDetail() {
     }
     setShowConfirmModal(true)
   }, [isEditable, plan, entries, addToast])
+
+  const scanReads = useMemo(() => scanLog.map(read => ({
+    ...read,
+    nome: planNameMap.get(read.codigo) || catalogNames.get(read.codigo) || null,
+    total: countedByCode.get(read.codigo) || 0,
+    tone: planCodes.size === 0 ? 'none' as const : planCodes.has(read.codigo) ? 'ok' as const : 'extra' as const
+  })), [scanLog, planNameMap, catalogNames, countedByCode, planCodes])
 
   if (loading) {
     return (
@@ -586,17 +632,20 @@ export default function CountDetail() {
       {isEditable && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-paper/95 backdrop-blur px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-2xl">
-            <ManualEntry onAdd={onAdd} onScan={() => setShowScanner(true)} />
+            <ManualEntry onAdd={onAdd} onScan={openScanner} />
           </div>
         </div>
       )}
 
       {showScanner && (
-        <Suspense fallback={<div className="fixed inset-0 z-[60] bg-black flex items-center justify-center text-white/80 text-sm">Abrindo câmera…</div>}>
+        <Suspense fallback={<div className="light-palette fixed inset-0 z-[60] bg-black flex items-center justify-center text-white/80 text-sm">Abrindo câmera…</div>}>
           <BarcodeScanner
-            planCodes={planCodes}
-            onDetected={(code: string) => onAdd(code, 1)}
-            onClose={() => setShowScanner(false)}
+            reads={scanReads}
+            readCount={scanCount}
+            onDetected={onScanned}
+            onClose={closeScanner}
+            onUndo={lastAdd && scanLog.length > 0 ? undoLastScan : undefined}
+            paused={unknownQueue.length > 0}
           />
         </Suspense>
       )}
@@ -626,7 +675,7 @@ export default function CountDetail() {
                   onClick={() => {
                     const s = pendingUnknown.suggestion!
                     const q = pendingUnknown.qty
-                    setPendingUnknown(null)
+                    dismissUnknown()
                     onAdd(s, q)
                   }}
                 >
@@ -636,7 +685,7 @@ export default function CountDetail() {
             )}
 
             <div className="flex gap-2">
-              <button className="btn btn-secondary flex-1" onClick={() => setPendingUnknown(null)}>
+              <button className="btn btn-secondary flex-1" onClick={dismissUnknown}>
                 Cancelar
               </button>
               <button

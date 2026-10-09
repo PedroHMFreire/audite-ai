@@ -11,7 +11,7 @@
 //  - Supabase/API: NÃO intercepta (evita servir dados velhos).
 //  - CACHE_NAME versionado: o activate apaga os caches antigos.
 
-const CACHE_NAME = 'audite-v3';
+const CACHE_NAME = 'audite-v4';
 const SHELL = '/index.html';
 
 const PRECACHE = [
@@ -19,6 +19,7 @@ const PRECACHE = [
   '/index.html',
   '/manifest.json',
   '/logo.svg',
+  '/theme.js',
   '/icon-192.png',
   '/icon-512.png',
   '/icon-192-maskable.png',

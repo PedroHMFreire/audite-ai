@@ -1,5 +1,5 @@
 // Captura telas do app (desktop e celular) contra o ambiente local.
-// Uso: node tests/screenshots.mjs <pasta-de-saida> [rota1,rota2,...]
+// Uso: [SHOT_THEME=dark] node tests/screenshots.mjs <pasta-de-saida> [rota1,rota2,...]
 import { chromium, devices } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
 import { mkdirSync } from 'node:fs'
@@ -71,10 +71,12 @@ const ids = await seed()
 const publicRoutes = ['/', '/login', '/cadastro', '/recuperar-senha', '/termos', '/privacidade']
 const privateRoutes = ['/dashboard', '/contagens', `/contagens/${ids.open}`, `/relatorio/${ids.done}`, '/categorias', '/cronograma', '/conta', '/assinatura', '/catalogo', '/ajuda']
 const only = process.argv[3]?.split(',')
+// Tema das capturas: SHOT_THEME=dark para a versão escura.
+const theme = process.env.SHOT_THEME === 'dark' ? 'dark' : 'light'
 
 const browser = await chromium.launch()
 for (const [label, ctxOpts] of [['desktop', { viewport: { width: 1280, height: 800 } }], ['mobile', devices['iPhone 13']]]) {
-  const ctx = await browser.newContext({ ...ctxOpts, locale: 'pt-BR' })
+  const ctx = await browser.newContext({ ...ctxOpts, locale: 'pt-BR', colorScheme: theme })
   const page = await ctx.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))

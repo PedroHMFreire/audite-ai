@@ -104,7 +104,7 @@ export default function Signup() {
           <p id="password-hint" className="mt-1.5 text-xs text-zinc-500">Pelo menos 8 caracteres.</p>
         </div>
         <label className="flex items-start gap-3 text-sm text-zinc-600">
-          <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-zinc-300 accent-[#161614]"
+          <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-zinc-300 accent-brand"
             checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
           <span>
             Li e aceito os <Link to="/termos" target="_blank" className="link">termos de uso</Link> e

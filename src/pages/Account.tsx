@@ -1,3 +1,4 @@
+import { ThemeSetting } from '@/components/ThemeToggle'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
@@ -135,6 +136,12 @@ export default function Account() {
           </div>
           <button type="submit" className="btn" disabled={savingProfile}>{savingProfile ? 'Salvando…' : 'Salvar'}</button>
         </form>
+      </section>
+
+      <section aria-labelledby="aparencia" className="card">
+        <h2 id="aparencia" className="text-base font-semibold">Aparência</h2>
+        <p className="mt-1 text-sm text-zinc-500">Automático acompanha o tema do seu aparelho.</p>
+        <div className="mt-4 max-w-sm"><ThemeSetting /></div>
       </section>
 
       <section aria-labelledby="senha" className="card">

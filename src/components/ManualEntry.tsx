@@ -3,7 +3,7 @@ import { Plus, ScanBarcode } from 'lucide-react'
 
 /**
  * Barra de inserção de itens da contagem, fixa no rodapé.
- * - "Escanear" (câmera) é a ação principal.
+ * - "Bipar com a câmera" é a ação principal: abre o bipe em sequência.
  * - Campo manual sem autocorreção: códigos não devem ser "corrigidos".
  * - Alvos de toque amplos, para usar no estoque com uma mão.
  */
@@ -39,7 +39,7 @@ export default function ManualEntry({
     <div className="space-y-2">
       <button type="button" onClick={onScan} className="btn btn-lg w-full">
         <ScanBarcode className="h-5 w-5" aria-hidden="true" />
-        Escanear código
+        Bipar com a câmera
       </button>
 
       <form onSubmit={submit} className="flex items-stretch gap-2">

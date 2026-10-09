@@ -62,7 +62,7 @@ export default function Home() {
     <div className="mx-auto max-w-2xl space-y-8">
       <header>
         <p className="eyebrow">{storeName || 'Sua loja'}</p>
-        <h1 className="mt-1 font-display text-4xl font-normal">O que vamos contar hoje?</h1>
+        <h1 className="mt-1 font-display text-3xl font-bold tracking-tight sm:text-4xl">O que vamos contar hoje?</h1>
       </header>
 
       <AccessNotice />

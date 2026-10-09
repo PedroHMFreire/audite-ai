@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import Logo from './Logo'
+import ThemeToggle from './ThemeToggle'
 
 /** Moldura das telas de entrada: cadastro, login e recuperação de senha. */
 export default function AuthLayout({
@@ -16,14 +17,15 @@ export default function AuthLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
-      <header className="container-safe flex h-14 items-center">
+      <header className="container-safe flex h-14 items-center justify-between">
         <Link to="/" aria-label="Audite — página inicial">
           <Logo />
         </Link>
+        <ThemeToggle />
       </header>
       <main className="flex flex-1 items-start justify-center px-4 pb-16 pt-8 sm:items-center sm:pt-0">
         <div className="w-full max-w-sm">
-          <h1 className="font-display text-4xl font-normal leading-tight">{title}</h1>
+          <h1 className="font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl">{title}</h1>
           {subtitle && <p className="mt-2 text-sm text-zinc-500">{subtitle}</p>}
           <div className="mt-8">{children}</div>
           {footer && <div className="mt-6 text-sm text-zinc-500">{footer}</div>}

@@ -8,9 +8,9 @@
     "dev:local": "vite --mode localdb --port 5180 --strictPort",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "test": "node --test tests/billing-logic.test.mjs tests/spreadsheet.test.mjs",
+    "test": "node --test tests/billing-logic.test.mjs tests/spreadsheet.test.mjs tests/scan-gate.test.mjs",
     "test:db": "node --test tests/db-security.test.mjs tests/billing-functions.test.mjs",
-    "test:e2e": "node --test tests/e2e.test.mjs tests/a11y.test.mjs",
+    "test:e2e": "node --test tests/e2e.test.mjs tests/a11y.test.mjs && A11Y_THEME=dark node --test tests/a11y.test.mjs",
     "test:all": "npm test && npm run test:db && npm run test:e2e",
     "pwa:icons": "node scripts/generate-pwa-icons.js"
   },

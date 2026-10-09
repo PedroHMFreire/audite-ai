@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Audite">
-  <rect width="512" height="512" rx="116" fill="#161614"/>
-  <path d="M148 268l72 72 144-150" fill="none" stroke="#FAFAF8" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="512" height="512" rx="139" fill="#2B50FF"/>
+  <path d="M158 375 256 137l98 238" fill="none" stroke="#FFFFFF" stroke-width="47" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M98 292h316" fill="none" stroke="#FFFFFF" stroke-width="47" stroke-linecap="round"/>
 </svg>

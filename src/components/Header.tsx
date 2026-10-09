@@ -1,6 +1,7 @@
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { CalendarDays, ClipboardList, Home, UserRound } from 'lucide-react'
 import Logo from './Logo'
+import ThemeToggle from './ThemeToggle'
 import { describeAccess, useAccess } from '@/contexts'
 
 const NAV = [
@@ -55,14 +56,17 @@ export default function Header() {
           </nav>
         </div>
 
-        {showStatus && (
-          <Link
-            to="/assinatura"
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:border-zinc-400 ${TONE_CLASS[status.tone]}`}
-          >
-            {status.label}
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {showStatus && (
+            <Link
+              to="/assinatura"
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:border-zinc-400 ${TONE_CLASS[status.tone]}`}
+            >
+              {status.label}
+            </Link>
+          )}
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   )

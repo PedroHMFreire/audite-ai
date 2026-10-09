@@ -1,5 +1,5 @@
 // Acessibilidade: nenhuma violação séria ou crítica (axe-core, WCAG 2.1 A/AA)
-// nas telas principais, em tamanho de celular.
+// nas telas principais, em tamanho de celular. A11Y_THEME=dark confere o tema escuro.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium, devices } from 'playwright'
@@ -33,7 +33,7 @@ before(async () => {
   await admin.from('schedule_items').insert({ config_id: cfg.data.id, category_id: cat.data.id, scheduled_date: new Date().toISOString().slice(0, 10), week_number: 1, day_of_week: 1 })
 
   browser = await chromium.launch()
-  const ctx = await browser.newContext({ ...devices['Pixel 7'], locale: 'pt-BR' })
+  const ctx = await browser.newContext({ ...devices['Pixel 7'], locale: 'pt-BR', colorScheme: process.env.A11Y_THEME === 'dark' ? 'dark' : 'light' })
   page = await ctx.newPage()
 })
 

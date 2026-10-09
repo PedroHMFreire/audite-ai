@@ -2,6 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Paleta. Cada cor é um trio RGB para o Tailwind aplicar opacidade.
+ * `.light-palette` fixa os valores claros num trecho que é sempre escuro por
+ * desenho (o leitor de câmera), onde `text-white` precisa ser branco de fato.
+ */
+:root,
+.light-palette {
+  --paper: 247 248 250;
+  --surface: 255 255 255;
+  --ink: 20 21 27;
+  --shadow: 20 21 27;
+  --n-50: 247 248 250; --n-100: 240 241 245; --n-200: 227 229 235; --n-300: 207 210 219; --n-400: 152 157 170;
+  --n-500: 99 104 118; --n-600: 77 81 94; --n-700: 54 57 68; --n-800: 33 35 43; --n-900: 20 21 27; --n-950: 11 12 16;
+  --brand: 43 80 255; --brand-hover: 31 63 224; --brand-text: 31 63 224; --brand-soft: 236 240 255;
+  --pos-50: 238 247 242; --pos-100: 220 239 229; --pos-200: 167 243 208; --pos-300: 110 231 183; --pos-400: 52 211 153;
+  --pos-500: 31 138 95; --pos-600: 23 115 78; --pos-700: 18 92 63; --pos-800: 15 74 51; --pos-900: 6 78 59; --pos-950: 2 44 34;
+  --cau-50: 251 245 233; --cau-100: 246 234 207; --cau-200: 253 230 138; --cau-300: 252 211 77; --cau-400: 251 191 36;
+  --cau-500: 183 121 31; --cau-600: 154 100 23; --cau-700: 124 80 18; --cau-800: 99 64 15; --cau-900: 120 53 15; --cau-950: 69 26 3;
+  --neg-50: 251 240 238; --neg-100: 247 222 218; --neg-200: 254 202 202; --neg-300: 252 165 165; --neg-400: 248 113 113;
+  --neg-500: 194 65 45; --neg-600: 168 53 36; --neg-700: 138 43 29; --neg-800: 111 35 24; --neg-900: 127 29 29; --neg-950: 69 10 10;
+}
+
+:root {
+  color-scheme: light;
+}
+
+/* Tema escuro: as escalas se invertem (50 vira o tom mais fundo, 900 o mais claro). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: 12 13 16;
+  --surface: 21 23 28;
+  --ink: 240 241 245;
+  --shadow: 0 0 0;
+  --n-50: 27 29 36; --n-100: 33 36 44; --n-200: 44 47 57; --n-300: 62 66 78; --n-400: 110 115 130;
+  --n-500: 150 155 170; --n-600: 176 180 193; --n-700: 203 206 216; --n-800: 225 227 234; --n-900: 240 241 245; --n-950: 250 250 252;
+  --brand: 43 80 255; --brand-hover: 66 100 255; --brand-text: 150 168 255; --brand-soft: 22 28 60;
+  --pos-50: 16 40 30; --pos-100: 22 58 43; --pos-200: 28 78 57; --pos-300: 36 110 80; --pos-400: 46 160 114;
+  --pos-500: 52 190 135; --pos-600: 70 205 150; --pos-700: 110 220 170; --pos-800: 150 232 195; --pos-900: 190 242 218; --pos-950: 225 250 238;
+  --cau-50: 46 34 12; --cau-100: 68 50 16; --cau-200: 95 70 22; --cau-300: 130 96 30; --cau-400: 190 136 42;
+  --cau-500: 224 160 50; --cau-600: 236 178 72; --cau-700: 242 196 105; --cau-800: 248 214 140; --cau-900: 251 230 180; --cau-950: 253 242 215;
+  --neg-50: 48 22 20; --neg-100: 72 30 27; --neg-200: 100 38 33; --neg-300: 140 52 44; --neg-400: 200 78 64;
+  --neg-500: 232 96 80; --neg-600: 242 118 104; --neg-700: 248 150 138; --neg-800: 252 180 170; --neg-900: 253 208 201; --neg-950: 254 230 226;
+}
+
+/* Dentro do tema escuro, o trecho fixado volta a ter cores claras. */
+:root[data-theme="dark"] .light-palette {
+  color-scheme: light;
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
@@ -17,13 +66,13 @@
   }
 
   :focus-visible {
-    outline: 2px solid #161614;
+    outline: 2px solid rgb(var(--brand-text));
     outline-offset: 2px;
   }
 
   ::selection {
-    background: #161614;
-    color: #FAFAF8;
+    background: rgb(var(--brand));
+    color: #fff;
   }
 
   /* Evita o zoom automático do iOS ao focar um campo. */
@@ -49,15 +98,15 @@
 
   .btn {
     @apply inline-flex min-h-11 select-none items-center justify-center gap-2 whitespace-nowrap
-           rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-white
+           rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-brand-on
            transition-colors duration-150
-           hover:bg-zinc-700 active:bg-zinc-800
+           hover:bg-brand-hover active:bg-brand-hover
            disabled:cursor-not-allowed disabled:opacity-40
            sm:min-h-10;
   }
 
   .btn-primary {
-    @apply bg-ink text-white hover:bg-zinc-700;
+    @apply bg-brand text-brand-on hover:bg-brand-hover;
   }
 
   .btn-secondary,
@@ -82,7 +131,7 @@
   }
 
   .btn-new-count {
-    @apply bg-ink text-white hover:bg-zinc-700;
+    @apply bg-brand text-brand-on hover:bg-brand-hover;
   }
 
   .input {
@@ -90,7 +139,7 @@
            placeholder:text-zinc-400
            transition-colors duration-150
            hover:border-zinc-400
-           focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink
+           focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand
            disabled:bg-zinc-100 disabled:text-zinc-500
            sm:min-h-10;
   }
@@ -202,6 +251,17 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Feixe do leitor na ilustração da landing. */
+@keyframes scanBeam {
+  0%, 100% { transform: translateY(-16px); }
+  50% { transform: translateY(16px); }
+}
+
+.animate-scan-beam {
+  animation: scanBeam 2.4s ease-in-out infinite;
 }

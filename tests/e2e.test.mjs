@@ -8,12 +8,14 @@
 //   node tests/serve-dist.mjs dist-e2e 4180
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, statSync } from 'node:fs'
+import { mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium, devices } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
 import ExcelJS from 'exceljs'
+import sharp from 'sharp'
+import { BarcodeFormat, QRCodeWriter } from '@zxing/library'
 import { localEnv } from './local-env.mjs'
 
 const env = localEnv()
@@ -46,6 +48,19 @@ async function makePlanXlsx() {
   return file
 }
 
+// Vídeo que o Chromium usa como câmera: a etiqueta aparece por 2 s e some por 4 s, em laço.
+async function makeFakeCamera(code) {
+  const size = 480
+  const matrix = new QRCodeWriter().encode(code, BarcodeFormat.QR_CODE, size, size, null)
+  const pixels = Buffer.alloc(size * size, 255)
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (matrix.get(x, y)) pixels[y * size + x] = 0
+  const frame = (raw) => sharp(raw, { raw: { width: size, height: size, channels: 1 } }).jpeg().toBuffer()
+  const [label, empty] = await Promise.all([frame(pixels), frame(Buffer.alloc(size * size, 255))])
+  const file = path.join(tmp, 'camera.mjpeg')
+  writeFileSync(file, Buffer.concat([...Array(60).fill(label), ...Array(120).fill(empty)]))
+  return file
+}
+
 async function addCode(code, qty) {
   await page.getByLabel('Código do produto').fill(code)
   if (qty) await page.getByLabel('Quantidade').fill(String(qty))
@@ -68,8 +83,10 @@ async function lastEmailLink(to) {
 }
 
 before(async () => {
-  browser = await chromium.launch()
-  ctx = await browser.newContext({ ...devices['Pixel 7'], locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', acceptDownloads: true })
+  browser = await chromium.launch({
+    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-video-capture=${await makeFakeCamera('400')}`]
+  })
+  ctx = await browser.newContext({ ...devices['Pixel 7'], locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', acceptDownloads: true, permissions: ['camera'] })
   page = await ctx.newPage()
   page.setDefaultTimeout(15000)
   page.on('pageerror', (e) => problems.push(`erro de página: ${e.message}`))
@@ -90,7 +107,7 @@ after(async () => {
 
 test('landing: carrega, não promete o que não existe e leva ao cadastro', async () => {
   await page.goto(base + '/', { waitUntil: 'networkidle' })
-  await assert.doesNotReject(page.getByRole('heading', { level: 1, name: /Saiba exatamente/ }).waitFor())
+  await assert.doesNotReject(page.getByRole('heading', { level: 1, name: /O balanço da loja/ }).waitFor())
   const text = await page.locator('body').innerText()
   for (const banned of ['500 lojas', '24/7', 'API de integração', 'depoimento']) {
     assert.ok(!text.includes(banned), `landing ainda cita "${banned}"`)
@@ -163,6 +180,35 @@ test('contagem: desfazer e remover item', async () => {
   await addCode('NAO-EXISTE-1', 1)
   await page.getByText('Itens contados (4)').waitFor()
   await page.getByRole('button', { name: 'Remover NAO-EXISTE-1' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click()
+  await page.getByText('Itens contados (3)').waitFor()
+})
+
+test('bipe em sequência: a câmera lança cada leitura na lista sem tocar em nada', async () => {
+  await page.getByRole('button', { name: 'Bipar com a câmera' }).click()
+  const scanner = page.getByRole('dialog', { name: 'Bipar com a câmera' })
+  await scanner.getByText('Cada leitura entra na lista sozinha').waitFor()
+
+  await scanner.getByText('1 peça bipada').waitFor({ timeout: 30000 })
+  const first = Date.now()
+  await scanner.getByText('Blazer lã cinza').waitFor()
+  // A etiqueta fica 2 s parada na frente da câmera: não pode contar de novo
+  // até sumir e voltar (4 s depois).
+  await scanner.getByText('2 peças bipadas').waitFor({ timeout: 30000 })
+  assert.ok(Date.now() - first > 2500, `etiqueta parada contou duas vezes (${Date.now() - first} ms)`)
+  assert.equal(await page.getByRole('status').count(), 0, 'sem avisos cobrindo a câmera')
+
+  await scanner.getByRole('button', { name: 'Desfazer último' }).click()
+  await scanner.getByText('1 peça bipada').waitFor()
+  await scanner.getByRole('button', { name: 'Concluir' }).click()
+  await scanner.waitFor({ state: 'detached' })
+
+  await page.getByText('Itens contados (4)').waitFor()
+  await page.waitForTimeout(1800) // reconciliação com o servidor
+  const countId = page.url().split('/').pop()
+  const saved = await admin.from('manual_entries').select('qty').eq('count_id', countId).eq('codigo', '400').single()
+  assert.equal(saved.data.qty, 1)
+  await page.getByRole('button', { name: 'Remover 400' }).click()
   await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click()
   await page.getByText('Itens contados (3)').waitFor()
 })
