@@ -17,6 +17,7 @@ Deno.serve(async (req) => {
     }
     const session = await stripe('POST', '/billing_portal/sessions', {
       customer: sub.stripe_customer_id,
+      configuration: env.portalConfig || undefined,
       return_url: `${env.siteUrl}/assinatura`,
       locale: 'pt-BR',
     })

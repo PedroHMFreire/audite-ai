@@ -2,7 +2,7 @@
 // Esta função não exige login (quem chama é o Stripe); a autenticidade é
 // garantida pela assinatura do evento.
 import { adminClient, env, json, stripe } from '../_shared/billing.ts'
-import { subscriptionToRow, verifyStripeSignature } from '../_shared/billing-logic.ts'
+import { isAuditeSubscription, subscriptionToRow, verifyStripeSignature } from '../_shared/billing-logic.ts'
 
 const HANDLED = new Set([
   'checkout.session.completed',
@@ -44,6 +44,8 @@ Deno.serve(async (req) => {
     // deno-lint-ignore no-explicit-any
     let subscription: any = null
     let userId: string | null = null
+    // Com a chave configurada a assinatura vem completa do Stripe e dá para conferir de qual produto é.
+    let complete = true
 
     if (event.type === 'checkout.session.completed') {
       if (object.mode !== 'subscription' || !object.subscription) return json(null, 200, { received: true })
@@ -52,8 +54,14 @@ Deno.serve(async (req) => {
       subscription = env.stripeKey
         ? await stripe('GET', `/subscriptions/${object.subscription}`)
         : { id: object.subscription, customer: object.customer, status: 'active' }
+      complete = Boolean(env.stripeKey)
     } else {
       subscription = object
+    }
+
+    // Assinatura de outro produto da mesma conta do Stripe: não é nossa.
+    if (complete && !isAuditeSubscription(subscription, env.priceId)) {
+      return json(null, 200, { received: true, ignored: true })
     }
 
     const row = subscriptionToRow(subscription)

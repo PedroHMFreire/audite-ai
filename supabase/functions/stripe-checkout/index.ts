@@ -1,4 +1,5 @@
 // Cria a sessão de checkout do Stripe para o usuário logado assinar o plano.
+import { APP_TAG } from '../_shared/billing-logic.ts'
 import { adminClient, billingConfigured, corsHeaders, ensureCustomer, env, getUser, json, stripe } from '../_shared/billing.ts'
 
 Deno.serve(async (req) => {
@@ -24,7 +25,7 @@ Deno.serve(async (req) => {
       customer,
       client_reference_id: user.id,
       line_items: [{ price: env.priceId, quantity: 1 }],
-      subscription_data: { metadata: { user_id: user.id } },
+      subscription_data: { metadata: { user_id: user.id, app: APP_TAG } },
       allow_promotion_codes: true,
       locale: 'pt-BR',
       success_url: `${env.siteUrl}/assinatura?checkout=sucesso`,

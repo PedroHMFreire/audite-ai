@@ -1,7 +1,7 @@
 // Lógica pura da cobrança (assinatura do webhook e mapeamento do Stripe).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { allowedOrigin, hmacSha256Hex, subscriptionToRow, toFormBody, verifyStripeSignature } from '../supabase/functions/_shared/billing-logic.ts'
+import { allowedOrigin, hmacSha256Hex, isAuditeSubscription, subscriptionToRow, toFormBody, verifyStripeSignature } from '../supabase/functions/_shared/billing-logic.ts'
 
 const secret = 'whsec_teste'
 const payload = JSON.stringify({ id: 'evt_1', type: 'customer.subscription.updated' })
@@ -85,4 +85,15 @@ test('CORS: só o próprio site e o ambiente local', () => {
   assert.equal(allowedOrigin(null, site), site)
   assert.equal(allowedOrigin('https://qualquer.example', ''), 'null')
   assert.equal(allowedOrigin('', ''), 'null')
+})
+
+test('conta do Stripe compartilhada: só assinatura do Audite é tratada', () => {
+  const sub = (price, metadata = {}) => ({ id: 'sub_1', metadata, items: { data: [{ price: { id: price } }] } })
+  assert.equal(isAuditeSubscription(sub('price_audite'), 'price_audite'), true)
+  assert.equal(isAuditeSubscription(sub('price_outro_saas', { user_id: 'x' }), 'price_audite'), false)
+  // Preço trocado depois: a marca gravada pelo checkout continua identificando.
+  assert.equal(isAuditeSubscription(sub('price_audite_novo', { app: 'audite' }), 'price_audite'), true)
+  assert.equal(isAuditeSubscription({ id: 'sub_1' }, 'price_audite'), false)
+  // Sem preço configurado (ambiente local) não há como distinguir.
+  assert.equal(isAuditeSubscription(sub('price_test'), ''), true)
 })

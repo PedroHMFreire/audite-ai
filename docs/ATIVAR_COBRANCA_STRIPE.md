@@ -1,5 +1,21 @@
 # Ativar a cobrança pelo Stripe
 
+> **Situação em 2026-10-13: ativada em produção.** Na conta Rakai Group do Stripe
+> foram criados o produto `Audite.ai` (`prod_VQwzudVVxsybuk`), o preço mensal de
+> R$ 59,00 (`price_1UQ5602LyjY9dpq1qpzmaC16`), um portal do cliente só do Audite
+> (`bpc_1UQ5602LyjY9dpq1TxBdlTgf`) e o webhook `we_1UQ56e2LyjY9dpq10bYwGFI1`.
+> As três funções estão publicadas e os segredos gravados no Supabase.
+> `SITE_URL` aponta para `https://audite-ai.onrender.com`; ao trocar de domínio,
+> atualize esse segredo e os endereços do portal no Stripe.
+>
+> A conta do Stripe é compartilhada com outros produtos. O webhook do Audite
+> recebe os eventos de assinatura de todos e só trata os que têm
+> `metadata.app = audite` ou cobram o preço do Audite. O portal usa a
+> configuração própria (`STRIPE_PORTAL_CONFIG`), sem tocar na padrão da conta.
+
+O passo a passo abaixo serve para refazer a configuração do zero (por exemplo,
+no modo de teste).
+
 O app já está pronto para cobrar. Enquanto as chaves não forem configuradas,
 o botão "Assinar" mostra "a assinatura online estará disponível em breve" e
 você libera acessos manualmente em **Conta → Administração**.
@@ -53,6 +69,7 @@ supabase secrets set \
   STRIPE_SECRET_KEY=sk_test_... \
   STRIPE_PRICE_ID=price_... \
   STRIPE_WEBHOOK_SECRET=whsec_... \
+  STRIPE_PORTAL_CONFIG=bpc_... \
   SITE_URL=https://SEU-DOMINIO
 ```
 

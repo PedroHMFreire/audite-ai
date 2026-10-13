@@ -5,6 +5,8 @@
 //   STRIPE_PRICE_ID        id do preço mensal do plano (price_...)
 //   STRIPE_WEBHOOK_SECRET  segredo do endpoint de webhook (whsec_...)
 //   SITE_URL               endereço público do app, sem barra no fim
+//   STRIPE_PORTAL_CONFIG   (opcional) configuração do portal do cliente só do Audite (bpc_...);
+//                          sem ela vale a configuração padrão da conta do Stripe
 // SUPABASE_URL, SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY já existem no ambiente.
 
 import { createClient, type SupabaseClient, type User } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
@@ -14,6 +16,7 @@ export const env = {
   stripeKey: Deno.env.get('STRIPE_SECRET_KEY') ?? '',
   priceId: Deno.env.get('STRIPE_PRICE_ID') ?? '',
   webhookSecret: Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '',
+  portalConfig: Deno.env.get('STRIPE_PORTAL_CONFIG') ?? '',
   siteUrl: (Deno.env.get('SITE_URL') ?? '').replace(/\/+$/, ''),
   supabaseUrl: Deno.env.get('SUPABASE_URL') ?? '',
   anonKey: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -86,7 +89,7 @@ export async function ensureCustomer(db: SupabaseClient, user: User): Promise<st
   const customer = await stripe('POST', '/customers', {
     email: user.email,
     name: profile?.store_name || profile?.owner_name || undefined,
-    metadata: { user_id: user.id },
+    metadata: { user_id: user.id, app: 'audite' },
   }, `customer-${user.id}`)
 
   const { error } = await db.from('subscriptions').upsert(

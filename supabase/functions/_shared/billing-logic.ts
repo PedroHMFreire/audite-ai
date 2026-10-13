@@ -36,6 +36,23 @@ export function subscriptionToRow(sub: any): SubscriptionRow {
   return row
 }
 
+/** Marca gravada nas assinaturas criadas pelo checkout do Audite. */
+export const APP_TAG = 'audite'
+
+/**
+ * A conta do Stripe é compartilhada com outros produtos, e o webhook recebe os
+ * eventos de assinatura de todos. É do Audite a assinatura criada pelo nosso
+ * checkout (marca em `metadata.app`) ou que cobra o preço do Audite. Sem preço
+ * configurado não há como distinguir, e o evento é aceito.
+ */
+// deno-lint-ignore no-explicit-any
+export function isAuditeSubscription(sub: any, priceId: string): boolean {
+  if (!priceId) return true
+  if (sub?.metadata?.app === APP_TAG) return true
+  // deno-lint-ignore no-explicit-any
+  return (sub?.items?.data ?? []).some((item: any) => item?.price?.id === priceId)
+}
+
 function hex(buffer: ArrayBuffer): string {
   return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
