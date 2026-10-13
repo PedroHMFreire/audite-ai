@@ -11,7 +11,7 @@
 //  - Supabase/API: NÃO intercepta (evita servir dados velhos).
 //  - CACHE_NAME versionado: o activate apaga os caches antigos.
 
-const CACHE_NAME = 'audite-v4';
+const CACHE_NAME = 'audite-v5';
 const SHELL = '/index.html';
 
 const PRECACHE = [
@@ -69,8 +69,10 @@ self.addEventListener('fetch', (event) => {
   if (isNavigation) {
     event.respondWith(
       fetch(request)
+        // Servidor sem regra de reescrita responde 404 nas rotas do SPA:
+        // busca o index novo na rede em vez de servir um antigo do cache.
+        .then((response) => (response.ok ? response : fetch(SHELL, { cache: 'no-store' })))
         .then((response) => {
-          // Se o servidor 404 numa rota do SPA, serve o index em cache.
           if (!response.ok) throw new Error('nav not ok: ' + response.status);
           const copy = response.clone();
           caches.open(CACHE_NAME).then((c) => c.put(SHELL, copy));
