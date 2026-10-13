@@ -1,26 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
-import {
-  createCount, getAllScheduleItems, getCategories, updateScheduleItemStatus,
-  type Category, type ScheduleItem,
-} from '@/lib/db'
-import { supabase } from '@/lib/supabaseClient'
+import { createCount, updateScheduleItemStatus } from '@/lib/db'
+import { loadBoard, setItemSellers, type BoardItem, type Seller } from '@/lib/team'
+import { namesLabel } from '@/lib/roteiro'
 import { parseLocalDate, toLocalISODate } from '@/lib/scheduleDates'
+import ChipPicker from '@/components/ChipPicker'
 import { accessErrorMessage, useCanWrite } from '@/components/AccessGate'
 import { useToast } from '@/components/Toast'
 
-type Item = ScheduleItem & { category: Pick<Category, 'name' | 'color'>; countDone: boolean }
+type Item = BoardItem
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
-const isDone = (i: Item) => i.status === 'completed' || i.countDone
+const isDone = (i: Item) => i.done
 
 export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: number }) {
   const nav = useNavigate()
   const { addToast } = useToast()
   const canWrite = useCanWrite()
   const [items, setItems] = useState<Item[]>([])
+  const [sellers, setSellers] = useState<Seller[]>([])
+  const [assigning, setAssigning] = useState<string[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12))
   const [selected, setSelected] = useState<Item | null>(null)
@@ -28,23 +29,9 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
 
   async function load() {
     try {
-      const [raw, categories] = await Promise.all([getAllScheduleItems(), getCategories()])
-      const byId = new Map(categories.map((c) => [c.id, c]))
-      const countIds = raw.map((i) => i.count_id).filter(Boolean) as string[]
-      const finished = new Set<string>()
-      if (countIds.length) {
-        const { data } = await supabase.from('counts').select('id').in('id', countIds).eq('status', 'finalizada')
-        for (const c of data || []) finished.add(c.id)
-      }
-      setItems(
-        raw
-          .filter((i) => i.status !== 'archived')
-          .map((i) => ({
-            ...i,
-            category: byId.get(i.category_id) || { name: 'Categoria removida', color: '#A29E96' },
-            countDone: !!i.count_id && finished.has(i.count_id),
-          }))
-      )
+      const board = await loadBoard()
+      setItems(board.items)
+      setSellers(board.sellers)
     } catch (err) {
       addToast({ type: 'error', message: 'Não foi possível carregar o cronograma', description: err instanceof Error ? err.message : undefined })
     } finally {
@@ -87,7 +74,7 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
     setBusy(true)
     try {
       await action()
-      setSelected(null)
+      close()
       await load()
     } catch (err) {
       const blocked = accessErrorMessage(err)
@@ -95,6 +82,11 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
     } finally {
       setBusy(false)
     }
+  }
+
+  function close() {
+    setSelected(null)
+    setAssigning(null)
   }
 
   async function startCount(item: Item) {
@@ -180,7 +172,10 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
                       <span className="text-[11px] uppercase text-zinc-500">{WEEKDAYS[(date.getDay() + 6) % 7]}</span>
                     </span>
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.category.color }} aria-hidden="true" />
-                    <span className={`min-w-0 flex-1 truncate text-sm ${isDone(item) || item.status === 'skipped' ? 'text-zinc-500 line-through' : ''}`}>{item.category.name}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate text-sm ${isDone(item) || item.status === 'skipped' ? 'text-zinc-500 line-through' : ''}`}>{item.category.name}</span>
+                      {sellers.length > 0 && <span className="block truncate text-xs text-zinc-500">{namesLabel(item.sellerNames)}</span>}
+                    </span>
                     <span className={`shrink-0 text-xs ${late ? 'font-medium text-red-600' : 'text-zinc-500'}`}>
                       {isDone(item) ? 'Feita' : item.status === 'skipped' ? 'Pulada' : late ? 'Atrasada' : item.scheduled_date === today ? 'Hoje' : ''}
                     </span>
@@ -193,7 +188,7 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
       </div>
 
       {selected && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 animate-fade-in sm:items-center" onClick={() => !busy && setSelected(null)} role="presentation">
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 animate-fade-in sm:items-center" onClick={() => !busy && close()} role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="item-titulo" onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl animate-scale-in">
             <p className="text-xs text-zinc-500">
@@ -203,6 +198,34 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: selected.category.color }} aria-hidden="true" />
               {selected.category.name}
             </h3>
+            {assigning ? (
+              <div className="mt-4 space-y-4">
+                <ChipPicker
+                  legend="Quem faz esta contagem"
+                  hint="Sem ninguém marcado, a contagem é de toda a equipe."
+                  options={sellers}
+                  value={assigning}
+                  onChange={setAssigning}
+                />
+                <div className="flex flex-col gap-2">
+                  <button type="button" className="btn" disabled={busy} onClick={() => run(() => setItemSellers(selected.id, assigning))}>
+                    {busy ? 'Salvando…' : 'Salvar responsáveis'}
+                  </button>
+                  <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => setAssigning(null)}>Voltar</button>
+                </div>
+              </div>
+            ) : (
+            <>
+            {sellers.length > 0 && (
+              <p className="mt-2 flex items-center justify-between gap-3 text-sm text-zinc-600">
+                <span className="min-w-0 truncate">Responsável: <span className="font-medium text-ink">{namesLabel(selected.sellerNames)}</span></span>
+                {canWrite && (
+                  <button type="button" className="link shrink-0 text-sm" onClick={() => setAssigning(selected.sellerIds.filter((id) => sellers.some((s) => s.id === id)))}>
+                    Alterar
+                  </button>
+                )}
+              </p>
+            )}
             <div className="mt-5 flex flex-col gap-2">
               {selected.count_id ? (
                 <button type="button" className="btn" disabled={busy} onClick={() => nav(selected.countDone ? `/relatorio/${selected.count_id}` : `/contagens/${selected.count_id}`)}>
@@ -227,8 +250,10 @@ export default function ScheduleCalendar({ refreshTrigger }: { refreshTrigger?: 
                   Voltar para pendente
                 </button>
               ) : null}
-              <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => setSelected(null)}>Fechar</button>
+              <button type="button" className="btn btn-quiet" disabled={busy} onClick={close}>Fechar</button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
@@ -243,13 +268,16 @@ function Pill({ item, today, onClick }: { item: Item; today: string; onClick: ()
     <button
       type="button"
       onClick={onClick}
-      title={item.category.name}
+      title={`${item.category.name} — ${namesLabel(item.sellerNames)}`}
       className={`flex w-full items-center gap-1.5 rounded-md border px-1.5 py-1 text-left text-xs transition-colors hover:border-zinc-400 ${
         late ? 'border-red-100 bg-red-50' : 'border-zinc-200 bg-white'
       }`}
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: item.category.color }} aria-hidden="true" />
-      <span className={`min-w-0 flex-1 truncate ${done || item.status === 'skipped' ? 'text-zinc-500 line-through' : ''}`}>{item.category.name}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate ${done || item.status === 'skipped' ? 'text-zinc-500 line-through' : ''}`}>{item.category.name}</span>
+        {item.sellerNames.length > 0 && <span className="block truncate text-[11px] text-zinc-500">{item.sellerNames.join(', ')}</span>}
+      </span>
       {done && <Check className="h-3 w-3 shrink-0 text-green-600" aria-label="Feita" />}
     </button>
   )

@@ -321,7 +321,7 @@ test('lista de contagens: busca, renomear, arquivar e restaurar', async () => {
   await page.getByText('Balanço renomeado').waitFor()
 })
 
-test('cronograma: categorias, gerar e iniciar uma contagem pelo calendário', async () => {
+test('cronograma: categorias, equipe, roteiro num clique, documento e acompanhamento', async () => {
   await page.goto(base + '/cronograma', { waitUntil: 'networkidle' })
   await page.getByRole('link', { name: 'Cadastrar categorias' }).click()
   await page.waitForURL('**/categorias')
@@ -334,26 +334,94 @@ test('cronograma: categorias, gerar e iniciar uma contagem pelo calendário', as
   await page.getByRole('button', { name: 'Salvar' }).click()
   await page.getByText('Bijuterias & Lenços').waitFor()
 
+  // Equipe: Ana cuida de Vestidos e Blusas; Bia divide Vestidos com ela.
+  await page.getByRole('link', { name: 'Equipe' }).click()
+  await page.waitForURL('**/equipe')
+  for (const [name, phone, cats] of [['Ana', '(11) 98765-4321', ['Vestidos', 'Blusas']], ['Bia', '', ['Vestidos']]]) {
+    await page.getByRole('button', { name: 'Novo' }).click()
+    await page.getByLabel('Nome do vendedor').fill(name)
+    if (phone) await page.getByLabel('WhatsApp').fill(phone)
+    for (const cat of cats) await page.getByRole('button', { name: cat, exact: true }).click()
+    await page.getByRole('button', { name: 'Salvar' }).click()
+    await page.getByRole('listitem').filter({ hasText: name }).first().waitFor()
+  }
+  await page.getByRole('link', { name: 'Categorias' }).click()
+  await page.getByRole('listitem').filter({ hasText: 'Vestidos' }).getByText('Ana e Bia').waitFor()
+  await page.getByRole('listitem').filter({ hasText: 'Calças' }).getByText('Toda a equipe').waitFor()
+
   await page.getByRole('link', { name: 'Calendário' }).click()
-  await page.getByRole('button', { name: 'Novo cronograma' }).click()
-  await page.getByPlaceholder('Ex.: Ciclo de outubro').fill('Ciclo de teste')
+  await page.getByRole('button', { name: 'Gerar roteiro' }).click()
+  await page.getByLabel('Nome', { exact: true }).fill('Ciclo de teste')
   // Começa hoje, para haver itens no mês exibido.
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-  await page.locator('input[type="date"]').fill(today)
-  await page.getByRole('button', { name: 'Gerar cronograma' }).click()
-  await page.getByText('Cronograma criado').waitFor()
+  await page.getByLabel('Início', { exact: true }).fill(today)
+  await page.getByLabel('Orientações para a equipe').fill('Conte antes de abrir a loja.')
+  await page.locator('form').getByRole('button', { name: 'Gerar roteiro' }).click()
+  await page.getByText('Roteiro criado').waitFor()
 
-  const { data: items } = await admin.from('schedule_items').select('scheduled_date, day_of_week, schedule_configs!inner(user_id)')
+  const { data: items } = await admin.from('schedule_items')
+    .select('scheduled_date, day_of_week, categories(name), schedule_item_sellers(sellers(name)), schedule_configs!inner(user_id)')
     .eq('schedule_configs.user_id', userId).is('archived_at', null)
-  assert.equal(items.length, 16, '4 categorias por semana × 4 semanas')
+  assert.equal(items.length, 16, '4 categorias × 4 semanas')
+  const responsibles = { Vestidos: 'Ana,Bia', Blusas: 'Ana', 'Calças': '', 'Bijuterias & Lenços': '' }
   for (const it of items) {
-    // A data gravada cai no dia da semana pedido (1 = segunda … 7 = domingo).
+    // A data gravada cai no dia da semana registrado (1 = segunda … 7 = domingo).
     const dow = new Date(it.scheduled_date + 'T12:00:00').getDay() || 7
     assert.equal(dow, it.day_of_week, `data ${it.scheduled_date} não bate com o dia ${it.day_of_week}`)
+    assert.equal(it.schedule_item_sellers.map((l) => l.sellers.name).sort().join(','), responsibles[it.categories.name], it.categories.name)
+  }
+  for (const name of Object.keys(responsibles)) {
+    assert.equal(items.filter((it) => it.categories.name === name).length, 4, `${name} uma vez por semana`)
   }
 
-  const first = page.locator('section[aria-label="Calendário de contagens"] ul button').first()
-  await first.click()
+  // O roteiro já abre pronto para entregar: PDF do gerente e mensagem de cada vendedor.
+  const share = page.getByRole('dialog', { name: 'Emitir roteiro' })
+  const [pdf] = await Promise.all([page.waitForEvent('download'), share.getByRole('button', { name: 'Baixar PDF' }).click()])
+  const pdfFile = path.join(tmp, 'roteiro.pdf')
+  await pdf.saveAs(pdfFile)
+  assert.ok(statSync(pdfFile).size > 2000, 'PDF do roteiro vazio')
+  const wa = await share.getByRole('listitem').filter({ hasText: 'Ana' }).getByRole('link', { name: 'WhatsApp' }).getAttribute('href')
+  assert.match(wa, /^https:\/\/wa\.me\/5511987654321\?text=/)
+  const message = decodeURIComponent(wa.split('text=')[1])
+  assert.match(message, /Vestidos \(com Bia\)/)
+  assert.match(message, /Conte antes de abrir a loja\./)
+  assert.doesNotMatch(message, /Blusas \(com/)
+  assert.equal(await share.getByRole('listitem').filter({ hasText: 'Bia' }).getByRole('link', { name: 'WhatsApp' }).count(), 0, 'Bia não tem telefone')
+  await share.getByRole('button', { name: 'Fechar' }).click()
+
+  // Aviso no início, com as orientações.
+  await page.goto(base + '/dashboard', { waitUntil: 'networkidle' })
+  const alert = page.locator('section[aria-labelledby="roteiro"]')
+  await alert.getByText('Orientações de contagem').click()
+  await alert.getByText('Conte antes de abrir a loja.').waitFor()
+
+  // Acompanhamento por responsável.
+  await page.goto(base + '/acompanhamento', { waitUntil: 'networkidle' })
+  await page.getByRole('radio', { name: 'Tudo' }).click()
+  const byWho = page.locator('section[aria-labelledby="por-responsavel"]')
+  await byWho.getByRole('listitem').filter({ hasText: 'Ana' }).getByText('0 de 8 feitas').waitFor()
+  await byWho.getByRole('listitem').filter({ hasText: 'Bia' }).getByText('0 de 4 feitas').waitFor()
+  await byWho.getByRole('listitem').filter({ hasText: 'Toda a equipe' }).getByText('0 de 8 feitas').waitFor()
+
+  // Troca o responsável de uma contagem e marca como feita.
+  await page.goto(base + '/cronograma', { waitUntil: 'networkidle' })
+  const calendar = page.locator('section[aria-label="Calendário de contagens"]')
+  await calendar.locator('ul button').filter({ hasText: 'Calças' }).first().click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Alterar' }).click()
+  await dialog.getByRole('button', { name: 'Bia', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Salvar responsáveis' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  await calendar.locator('ul button').filter({ hasText: 'Calças' }).first().click()
+  await dialog.getByText('Responsável: Bia').waitFor()
+  await dialog.getByRole('button', { name: 'Marcar como feita' }).click()
+  await dialog.waitFor({ state: 'detached' })
+  await page.goto(base + '/acompanhamento', { waitUntil: 'networkidle' })
+  await page.getByRole('radio', { name: 'Tudo' }).click()
+  await byWho.getByRole('listitem').filter({ hasText: 'Bia' }).getByText('1 de 5 feitas').waitFor()
+
+  await page.goto(base + '/cronograma', { waitUntil: 'networkidle' })
+  await calendar.locator('ul button').filter({ hasText: 'Vestidos' }).first().click()
   await page.getByRole('dialog').getByRole('button', { name: 'Começar contagem' }).click()
   await page.waitForURL(/\/contagens\/[0-9a-f-]{36}$/)
 })

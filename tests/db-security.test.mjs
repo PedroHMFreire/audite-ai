@@ -237,14 +237,64 @@ test('administrador libera acesso manualmente e sempre tem acesso', async () => 
   await admin.from('user_roles').update({ role: 'user', permissions: [] }).eq('user_id', b.id)
 })
 
+test('equipe do cronograma: cada conta só enxerga e vincula os próprios vendedores', async () => {
+  const mk = async (u, tag) => {
+    const seller = await u.client.from('sellers').insert({ user_id: u.id, name: `Vend ${tag}` }).select('id').single()
+    assert.ifError(seller.error)
+    const cat = await u.client.from('categories').insert({ user_id: u.id, name: `Cat ${tag} ${stamp}` }).select('id').single()
+    assert.ifError(cat.error)
+    const cfg = await u.client.from('schedule_configs')
+      .insert({ user_id: u.id, name: 'Roteiro', sectors_per_week: 1, start_date: '2026-10-12', frequency: 'weekly', cycles: 4 }).select('id').single()
+    assert.ifError(cfg.error)
+    const item = await u.client.from('schedule_items')
+      .insert({ config_id: cfg.data.id, category_id: cat.data.id, scheduled_date: '2026-10-12', week_number: 1, day_of_week: 1 }).select('id').single()
+    assert.ifError(item.error)
+    return { seller: seller.data.id, cat: cat.data.id, item: item.data.id, cfg: cfg.data.id }
+  }
+  const mine = await mk(a, 'A')
+  const theirs = await mk(b, 'B')
+  assert.ifError((await a.client.from('category_sellers').insert({ category_id: mine.cat, seller_id: mine.seller })).error)
+  assert.ifError((await a.client.from('schedule_item_sellers').insert({ schedule_item_id: mine.item, seller_id: mine.seller })).error)
+
+  // B não lê nada de A
+  for (const table of ['sellers', 'category_sellers', 'schedule_item_sellers']) {
+    const { data, error } = await b.client.from(table).select('*')
+    assert.ifError(error)
+    assert.ok(!JSON.stringify(data).includes(mine.seller), `${table} de A visível para B`)
+  }
+  // B não altera nem apaga o vendedor de A
+  await b.client.from('sellers').update({ name: 'Invadido' }).eq('id', mine.seller)
+  await b.client.from('sellers').delete().eq('id', mine.seller)
+  await b.client.from('category_sellers').delete().eq('seller_id', mine.seller)
+  const { data: still } = await admin.from('sellers').select('name, category_sellers(category_id)').eq('id', mine.seller).single()
+  assert.equal(still.name, 'Vend A')
+  assert.equal(still.category_sellers.length, 1)
+  // Vínculo cruzado: nem o vendedor de A nas coisas de B, nem o de B nas de A
+  assert.ok((await b.client.from('sellers').insert({ user_id: a.id, name: 'Intruso' })).error)
+  assert.ok((await b.client.from('category_sellers').insert({ category_id: theirs.cat, seller_id: mine.seller })).error)
+  assert.ok((await b.client.from('category_sellers').insert({ category_id: mine.cat, seller_id: theirs.seller })).error)
+  assert.ok((await b.client.from('schedule_item_sellers').insert({ schedule_item_id: theirs.item, seller_id: mine.seller })).error)
+  assert.ok((await b.client.from('schedule_item_sellers').insert({ schedule_item_id: mine.item, seller_id: theirs.seller })).error)
+  // Visitante não lê
+  for (const table of ['sellers', 'category_sellers', 'schedule_item_sellers']) {
+    const { data, error } = await anon.from(table).select('*').limit(1)
+    assert.ok(error || (data || []).length === 0, `${table} exposta para anon`)
+  }
+  // Valores fora do combinado são recusados
+  assert.ok((await a.client.from('schedule_configs').update({ frequency: 'diario' }).eq('id', mine.cfg)).error)
+  assert.ok((await a.client.from('sellers').insert({ user_id: a.id, name: '   ' })).error)
+})
+
 test('exclusão de conta apaga todos os dados do usuário', async () => {
   const c = await newUser('c', { store_name: 'Loja C' })
   const cnt = await c.client.from('counts').insert({ user_id: c.id, nome: 'C1' }).select('id').single()
   assert.ifError(cnt.error)
   await c.client.rpc('add_manual_entry', { p_count_id: cnt.data.id, p_codigo: '1', p_qty: 1 })
-  await c.client.from('categories').insert({ user_id: c.id, name: 'Vestidos' })
+  const cat = await c.client.from('categories').insert({ user_id: c.id, name: 'Vestidos' }).select('id').single()
+  const seller = await c.client.from('sellers').insert({ user_id: c.id, name: 'Ana' }).select('id').single()
+  assert.ifError((await c.client.from('category_sellers').insert({ category_id: cat.data.id, seller_id: seller.data.id })).error)
   assert.ifError((await c.client.rpc('delete_my_account')).error)
-  for (const [table, col] of [['counts', 'user_id'], ['categories', 'user_id'], ['user_profiles', 'id'], ['subscriptions', 'user_id'], ['user_roles', 'user_id']]) {
+  for (const [table, col] of [['counts', 'user_id'], ['categories', 'user_id'], ['sellers', 'user_id'], ['user_profiles', 'id'], ['subscriptions', 'user_id'], ['user_roles', 'user_id']]) {
     const { data } = await admin.from(table).select('*').eq(col, c.id)
     assert.equal(data.length, 0, `${table} ainda tem dados`)
   }

@@ -52,6 +52,7 @@ export async function exportMyData(): Promise<void> {
   const tables = [
     'user_profiles', 'subscriptions', 'counts', 'plan_items', 'manual_entries', 'results',
     'divergence_justifications', 'categories', 'schedule_configs', 'schedule_items', 'product_catalog',
+    'sellers', 'category_sellers', 'schedule_item_sellers',
   ]
   const dump: Record<string, unknown> = {
     exportado_em: new Date().toISOString(),

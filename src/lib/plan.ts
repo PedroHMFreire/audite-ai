@@ -13,7 +13,7 @@ export const PLAN = {
     'Leitura de código de barras pela câmera do celular',
     'Importação da planilha de estoque (Excel ou CSV)',
     'Relatório de faltas e sobras em PDF e Excel',
-    'Cronograma de contagens por categoria',
+    'Roteiro de contagens cíclicas por categoria e por vendedor',
     'Funciona sem internet durante a contagem',
   ],
 } as const

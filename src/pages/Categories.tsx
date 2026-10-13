@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { createCategory, deleteCategory, getCategories, updateCategory, type Category } from '@/lib/db'
+import { getCategorySellers, getSellers, setCategorySellers, type Seller } from '@/lib/team'
+import { namesLabel } from '@/lib/roteiro'
+import ChipPicker from '@/components/ChipPicker'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import ScheduleTabs from '@/components/ScheduleTabs'
 import { useToast } from '@/components/Toast'
@@ -10,11 +13,13 @@ const COLORS = ['#3D3B36', '#8A6A4F', '#B7791F', '#C2412D', '#A14A6B', '#6B5B95'
 
 const SUGGESTIONS = ['Vestidos', 'Blusas', 'Calças', 'Saias', 'Casacos', 'Jeans', 'Calçados', 'Bolsas', 'Acessórios']
 
-type Draft = { id: string | null; name: string; color: string }
+type Draft = { id: string | null; name: string; color: string; sellerIds: string[] }
 
 export default function Categories() {
   const { addToast } = useToast()
   const [categories, setCategories] = useState<Category[]>([])
+  const [sellers, setSellers] = useState<Seller[]>([])
+  const [responsibles, setResponsibles] = useState<Map<string, string[]>>(new Map())
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
@@ -22,7 +27,10 @@ export default function Categories() {
 
   const load = useCallback(async () => {
     try {
-      setCategories(await getCategories())
+      const [cats, team, byCategory] = await Promise.all([getCategories(), getSellers(), getCategorySellers()])
+      setCategories(cats)
+      setSellers(team)
+      setResponsibles(byCategory)
     } catch (err) {
       addToast({ type: 'error', message: 'Não foi possível carregar as categorias', description: err instanceof Error ? err.message : undefined })
     } finally {
@@ -45,8 +53,9 @@ export default function Categories() {
     }
     setSaving(true)
     try {
-      if (draft.id) await updateCategory(draft.id, { name, color: draft.color })
-      else await createCategory({ name, priority: 3, color: draft.color, is_active: true })
+      const id = draft.id || (await createCategory({ name, priority: 3, color: draft.color, is_active: true })).id
+      if (draft.id) await updateCategory(id, { name, color: draft.color })
+      if (sellers.length > 0) await setCategorySellers(id, draft.sellerIds)
       setDraft(null)
       await load()
     } catch (err) {
@@ -77,6 +86,10 @@ export default function Categories() {
     }
   }
 
+  const sellerName = new Map(sellers.map((s) => [s.id, s.name]))
+  const responsibleNames = (categoryId: string) =>
+    (responsibles.get(categoryId) || []).map((id) => sellerName.get(id)).filter((n): n is string => !!n)
+
   const remaining = SUGGESTIONS.filter((s) => !categories.some((c) => c.name.toLowerCase() === s.toLowerCase()))
 
   return (
@@ -88,7 +101,7 @@ export default function Categories() {
           <p className="page-subtitle">Os grupos de produtos da loja. O cronograma distribui as categorias pelas semanas.</p>
         </div>
         {!draft && (
-          <button type="button" className="btn shrink-0" onClick={() => setDraft({ id: null, name: '', color: nextColor() })}>
+          <button type="button" className="btn shrink-0" onClick={() => setDraft({ id: null, name: '', color: nextColor(), sellerIds: [] })}>
             <Plus className="h-4 w-4" aria-hidden="true" /> Nova
           </button>
         )}
@@ -117,6 +130,15 @@ export default function Categories() {
               ))}
             </div>
           </fieldset>
+          {sellers.length > 0 && (
+            <ChipPicker
+              legend="Responsáveis pela contagem"
+              hint="Sem ninguém marcado, a contagem é de toda a equipe."
+              options={sellers}
+              value={draft.sellerIds}
+              onChange={(sellerIds) => setDraft({ ...draft, sellerIds })}
+            />
+          )}
           <div className="flex gap-2">
             <button type="submit" className="btn" disabled={saving || !draft.name.trim()}>{saving ? 'Salvando…' : 'Salvar'}</button>
             <button type="button" className="btn btn-quiet" onClick={() => setDraft(null)}>Cancelar</button>
@@ -136,8 +158,12 @@ export default function Categories() {
           {categories.map((c) => (
             <li key={c.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
-              <button type="button" className="btn btn-quiet btn-sm" onClick={() => setDraft({ id: c.id, name: c.name, color: c.color })}>Editar</button>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{c.name}</span>
+                {sellers.length > 0 && <span className="block truncate text-sm text-zinc-500">{namesLabel(responsibleNames(c.id))}</span>}
+              </span>
+              <button type="button" className="btn btn-quiet btn-sm"
+                onClick={() => setDraft({ id: c.id, name: c.name, color: c.color, sellerIds: (responsibles.get(c.id) || []).filter((id) => sellerName.has(id)) })}>Editar</button>
               <button type="button" className="btn btn-quiet btn-sm hover:bg-red-50 hover:text-red-600" onClick={() => setToDelete(c)}>Excluir</button>
             </li>
           ))}

@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import { getCounts, getUpcomingSchedule, type Count, type UpcomingSchedule } from '@/lib/db'
+import { getActiveScheduleConfig, getCounts, type Count } from '@/lib/db'
+import { loadBoard, type BoardItem } from '@/lib/team'
+import { itemState, namesLabel, shortDate } from '@/lib/roteiro'
+import { toLocalISODate } from '@/lib/scheduleDates'
 import { useAuth } from '@/contexts'
 import { AccessNotice, useCanWrite } from '@/components/AccessGate'
 import NewCountForm from '@/components/NewCountForm'
@@ -19,7 +22,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState<Count[]>([])
   const [last, setLast] = useState<Summary | null>(null)
-  const [upcoming, setUpcoming] = useState<UpcomingSchedule[]>([])
+  const [roteiro, setRoteiro] = useState<{ items: BoardItem[]; late: number; instructions: string | null; hasTeam: boolean } | null>(null)
   const [hasAny, setHasAny] = useState(false)
 
   const storeName = (user?.user_metadata?.store_name as string | undefined)?.trim()
@@ -28,14 +31,30 @@ export default function Home() {
     let alive = true
     ;(async () => {
       try {
-        const [counts, schedule] = await Promise.all([
+        const [counts, board, config] = await Promise.all([
           getCounts(20, 0, '', 'ativas'),
-          getUpcomingSchedule().catch(() => [] as UpcomingSchedule[]),
+          loadBoard().catch(() => null),
+          getActiveScheduleConfig().catch(() => null),
         ])
         if (!alive) return
         setHasAny(counts.length > 0)
         setOpen(counts.filter(isOpen).slice(0, 3))
-        setUpcoming(schedule.slice(0, 4))
+        if (board) {
+          // O aviso mostra o que está atrasado, o de hoje e o dos próximos 7 dias.
+          const now = new Date()
+          const today = toLocalISODate(now)
+          const horizon = toLocalISODate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7, 12))
+          const due = board.items.filter((i) => {
+            const state = itemState(i, today)
+            return state === 'atrasada' || state === 'hoje' || (state === 'pendente' && i.scheduled_date <= horizon)
+          })
+          setRoteiro({
+            items: due.slice(0, 6),
+            late: due.filter((i) => itemState(i, today) === 'atrasada').length,
+            instructions: config?.instructions?.trim() || null,
+            hasTeam: board.sellers.length > 0,
+          })
+        }
 
         const finished = counts.find((c) => c.status === 'finalizada')
         if (finished) {
@@ -68,6 +87,47 @@ export default function Home() {
       <AccessNotice />
 
       {canWrite && <NewCountForm />}
+
+      {roteiro && roteiro.items.length > 0 && (
+        <section aria-labelledby="roteiro" className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 id="roteiro" className="eyebrow">Roteiro de contagens</h2>
+            <Link to="/cronograma" className="text-xs text-zinc-500 hover:text-ink">Ver calendário</Link>
+          </div>
+          {roteiro.late > 0 && (
+            <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700" role="status">
+              {roteiro.late === 1 ? '1 contagem do roteiro está atrasada.' : `${roteiro.late} contagens do roteiro estão atrasadas.`}{' '}
+              <Link to="/acompanhamento" className="font-medium underline underline-offset-4">Acompanhar</Link>
+            </p>
+          )}
+          <ul className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white">
+            {roteiro.items.map((item) => {
+              const state = itemState(item, toLocalISODate(new Date()))
+              return (
+                <li key={item.id}>
+                  <Link to="/cronograma" className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-zinc-50">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.category.color || '#A29E96' }} aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{item.category.name}</span>
+                      {roteiro.hasTeam && <span className="block truncate text-xs text-zinc-500">{namesLabel(item.sellerNames)}</span>}
+                    </span>
+                    <span className={`shrink-0 text-xs ${state === 'atrasada' ? 'font-medium text-red-600' : state === 'hoje' ? 'font-medium text-ink' : 'text-zinc-500'}`}>
+                      {state === 'atrasada' ? 'Atrasada · ' : state === 'hoje' ? 'Hoje · ' : ''}
+                      {shortDate(item.scheduled_date)}
+                    </span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+          {roteiro.instructions && (
+            <details className="rounded-xl border border-zinc-200 bg-white px-5 py-3">
+              <summary className="cursor-pointer select-none text-sm font-medium">Orientações de contagem</summary>
+              <p className="mt-2 whitespace-pre-line text-sm text-zinc-600">{roteiro.instructions}</p>
+            </details>
+          )}
+        </section>
+      )}
 
       {loading ? (
         <div className="space-y-3" aria-busy="true">
@@ -116,29 +176,6 @@ export default function Home() {
                   Ver relatório <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </p>
               </Link>
-            </section>
-          )}
-
-          {upcoming.length > 0 && (
-            <section aria-labelledby="proximas">
-              <div className="mb-3 flex items-baseline justify-between">
-                <h2 id="proximas" className="eyebrow">Próximas do cronograma</h2>
-                <Link to="/cronograma" className="text-xs text-zinc-500 hover:text-ink">Ver calendário</Link>
-              </div>
-              <ul className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white">
-                {upcoming.map((s) => (
-                  <li key={s.id} className="flex items-center justify-between gap-4 px-5 py-3">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.category_color || '#A29E96' }} aria-hidden="true" />
-                      <span className="truncate text-sm">{s.category_name}</span>
-                    </span>
-                    <span className={`shrink-0 text-xs ${s.urgency === 'overdue' ? 'font-medium text-red-600' : 'text-zinc-500'}`}>
-                      {s.urgency === 'overdue' ? 'Atrasada · ' : s.urgency === 'today' ? 'Hoje · ' : ''}
-                      {formatDate(s.scheduled_date + 'T12:00:00')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
             </section>
           )}
         </>

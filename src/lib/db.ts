@@ -59,6 +59,10 @@ export type ScheduleConfig = {
   work_days: number[] // [1,2,3,4,5] = seg-sex
   is_active: boolean
   generated_at?: string
+  // Roteiro cíclico; cronogramas antigos não têm estes campos.
+  frequency?: 'weekly' | 'biweekly' | 'monthly' | null
+  cycles?: number | null
+  instructions?: string | null
   created_at: string
   updated_at: string
 }
@@ -974,7 +978,10 @@ export async function createScheduleConfig(config: Omit<ScheduleConfig, 'id' | '
       end_date: config.end_date || null,
       total_weeks: Math.min(52, Math.max(1, config.total_weeks)),
       work_days: workDays,
-      is_active: true
+      is_active: true,
+      frequency: config.frequency ?? null,
+      cycles: config.cycles ?? null,
+      instructions: config.instructions?.trim() || null
     })
     .select('*')
     .single()
@@ -983,11 +990,12 @@ export async function createScheduleConfig(config: Omit<ScheduleConfig, 'id' | '
   return data as ScheduleConfig
 }
 
-export async function updateScheduleConfig(id: string, updates: Partial<Pick<ScheduleConfig, 'name' | 'description' | 'is_active'>>): Promise<void> {
+export async function updateScheduleConfig(id: string, updates: Partial<Pick<ScheduleConfig, 'name' | 'description' | 'instructions' | 'is_active'>>): Promise<void> {
   const cleanUpdates: any = {}
   
   if (updates.name) cleanUpdates.name = updates.name.trim()
   if (updates.description !== undefined) cleanUpdates.description = updates.description?.trim() || null
+  if (updates.instructions !== undefined) cleanUpdates.instructions = updates.instructions?.trim() || null
   if (updates.is_active !== undefined) cleanUpdates.is_active = updates.is_active
   
   const { error } = await supabase

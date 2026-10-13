@@ -19,6 +19,8 @@ const CountDetail = lazy(() => import('@/pages/CountDetail'))
 const Report = lazy(() => import('@/pages/Report'))
 const Categories = lazy(() => import('@/pages/Categories'))
 const ScheduleConfig = lazy(() => import('@/pages/ScheduleConfig'))
+const Team = lazy(() => import('@/pages/Team'))
+const Progress = lazy(() => import('@/pages/Progress'))
 const Account = lazy(() => import('@/pages/Account'))
 const Subscription = lazy(() => import('@/pages/Subscription'))
 const Catalog = lazy(() => import('@/pages/Catalog'))
@@ -77,7 +79,9 @@ export default function App() {
           <Route path="/contagens/:id" element={<CountDetail />} />
           <Route path="/relatorio/:id" element={<Report />} />
           <Route path="/cronograma" element={<ScheduleConfig />} />
+          <Route path="/acompanhamento" element={<Progress />} />
           <Route path="/categorias" element={<Categories />} />
+          <Route path="/equipe" element={<Team />} />
           <Route path="/conta" element={<Account />} />
           <Route path="/assinatura" element={<Subscription />} />
           <Route path="/catalogo" element={<Catalog />} />
